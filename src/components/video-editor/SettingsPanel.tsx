@@ -1,0 +1,627 @@
+import { cn } from "@/lib/utils";
+import { useEffect, useRef } from "react";
+import { getAssetPath } from "@/lib/assetPath";
+import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { useState } from "react";
+import Block from '@uiw/react-color-block';
+import { Trash2, Download, Crop, X, Bug, Upload, Star } from "lucide-react";
+import { toast } from "sonner";
+import type { ZoomDepth, CropRegion, AnnotationRegion, AnnotationType } from "./types";
+import { CropControl } from "./CropControl";
+import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp";
+import { AnnotationSettingsPanel } from "./AnnotationSettingsPanel";
+import { type AspectRatio } from "@/utils/aspectRatioUtils";
+import type { ExportQuality } from "@/lib/exporter";
+import BilibiliIcon from '@/assets/bilibili.svg';
+
+const WALLPAPER_COUNT = 18;
+const WALLPAPER_RELATIVE = Array.from({ length: WALLPAPER_COUNT }, (_, i) => `wallpapers/wallpaper${i + 1}.jpg`);
+const GRADIENTS = [
+  "linear-gradient( 111.6deg,  rgba(114,167,232,1) 9.4%, rgba(253,129,82,1) 43.9%, rgba(253,129,82,1) 54.8%, rgba(249,202,86,1) 86.3% )",
+  "linear-gradient(120deg, #d4fc79 0%, #96e6a1 100%)",
+  "radial-gradient( circle farthest-corner at 3.2% 49.6%,  rgba(80,12,139,0.87) 0%, rgba(161,10,144,0.72) 83.6% )",
+  "linear-gradient( 111.6deg,  rgba(0,56,68,1) 0%, rgba(163,217,185,1) 51.5%, rgba(231, 148, 6, 1) 88.6% )",
+  "linear-gradient( 107.7deg,  rgba(235,230,44,0.55) 8.4%, rgba(252,152,15,1) 90.3% )",
+  "linear-gradient( 91deg,  rgba(72,154,78,1) 5.2%, rgba(251,206,70,1) 95.9% )",
+  "radial-gradient( circle farthest-corner at 10% 20%,  rgba(2,37,78,1) 0%, rgba(4,56,126,1) 19.7%, rgba(85,245,221,1) 100.2% )",
+  "linear-gradient( 109.6deg,  rgba(15,2,2,1) 11.2%, rgba(36,163,190,1) 91.1% )",
+  "linear-gradient(135deg, #FBC8B4, #2447B1)",
+  "linear-gradient(109.6deg, #F635A6, #36D860)",
+  "linear-gradient(90deg, #FF0101, #4DFF01)",
+  "linear-gradient(315deg, #EC0101, #5044A9)",
+  "linear-gradient(45deg, #ff9a9e 0%, #fad0c4 99%, #fad0c4 100%)",
+  "linear-gradient(to top, #a18cd1 0%, #fbc2eb 100%)",
+  "linear-gradient(to right, #ff8177 0%, #ff867a 0%, #ff8c7f 21%, #f99185 52%, #cf556c 78%, #b12a5b 100%)",
+  "linear-gradient(120deg, #84fab0 0%, #8fd3f4 100%)",
+  "linear-gradient(to right, #4facfe 0%, #00f2fe 100%)",
+  "linear-gradient(to top, #fcc5e4 0%, #fda34b 15%, #ff7882 35%, #c8699e 52%, #7046aa 71%, #0c1db8 87%, #020f75 100%)",
+  "linear-gradient(to right, #fa709a 0%, #fee140 100%)",
+  "linear-gradient(to top, #30cfd0 0%, #330867 100%)",
+  "linear-gradient(to top, #c471f5 0%, #fa71cd 100%)",
+  "linear-gradient(to right, #f78ca0 0%, #f9748f 19%, #fd868c 60%, #fe9a8b 100%)",
+  "linear-gradient(to top, #48c6ef 0%, #6f86d6 100%)",
+  "linear-gradient(to right, #0acffe 0%, #495aff 100%)",
+];
+
+interface SettingsPanelProps {
+  selected: string;
+  onWallpaperChange: (path: string) => void;
+  selectedZoomDepth?: ZoomDepth | null;
+  onZoomDepthChange?: (depth: ZoomDepth) => void;
+  selectedZoomId?: string | null;
+  onZoomDelete?: (id: string) => void;
+  selectedTrimId?: string | null;
+  onTrimDelete?: (id: string) => void;
+  shadowIntensity?: number;
+  onShadowChange?: (intensity: number) => void;
+  showBlur?: boolean;
+  onBlurChange?: (showBlur: boolean) => void;
+  motionBlurEnabled?: boolean;
+  onMotionBlurChange?: (enabled: boolean) => void;
+  borderRadius?: number;
+  onBorderRadiusChange?: (radius: number) => void;
+  padding?: number;
+  onPaddingChange?: (padding: number) => void;
+  cropRegion?: CropRegion;
+  onCropChange?: (region: CropRegion) => void;
+  aspectRatio: AspectRatio;
+  videoElement?: HTMLVideoElement | null;
+  exportQuality?: ExportQuality;
+  onExportQualityChange?: (quality: ExportQuality) => void;
+  onExport?: () => void;
+  selectedAnnotationId?: string | null;
+  annotationRegions?: AnnotationRegion[];
+  onAnnotationContentChange?: (id: string, content: string) => void;
+  onAnnotationTypeChange?: (id: string, type: AnnotationType) => void;
+  onAnnotationStyleChange?: (id: string, style: Partial<AnnotationRegion['style']>) => void;
+  onAnnotationFigureDataChange?: (id: string, figureData: any) => void;
+  onAnnotationDelete?: (id: string) => void;
+}
+
+export default SettingsPanel;
+
+const ZOOM_DEPTH_OPTIONS: Array<{ depth: ZoomDepth; label: string }> = [
+  { depth: 1, label: "1.25×" },
+  { depth: 2, label: "1.5×" },
+  { depth: 3, label: "1.8×" },
+  { depth: 4, label: "2.2×" },
+  { depth: 5, label: "3.5×" },
+  { depth: 6, label: "5×" },
+];
+
+export function SettingsPanel({ 
+  selected, 
+  onWallpaperChange, 
+  selectedZoomDepth, 
+  onZoomDepthChange, 
+  selectedZoomId, 
+  onZoomDelete, 
+  selectedTrimId,
+  onTrimDelete,
+  shadowIntensity = 0, 
+  onShadowChange, 
+  showBlur, 
+  onBlurChange, 
+  motionBlurEnabled = true, 
+  onMotionBlurChange, 
+  borderRadius = 0, 
+  onBorderRadiusChange, 
+  padding = 50, 
+  onPaddingChange, 
+  cropRegion, 
+  onCropChange, 
+  aspectRatio, 
+  videoElement, 
+  exportQuality = 'good',
+  onExportQualityChange,
+  onExport,
+  selectedAnnotationId,
+  annotationRegions = [],
+  onAnnotationContentChange,
+  onAnnotationTypeChange,
+  onAnnotationStyleChange,
+  onAnnotationFigureDataChange,
+  onAnnotationDelete,
+}: SettingsPanelProps) {
+  const [wallpaperPaths, setWallpaperPaths] = useState<string[]>([]);
+  const [customImages, setCustomImages] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      try {
+        const resolved = await Promise.all(WALLPAPER_RELATIVE.map(p => getAssetPath(p)))
+        if (mounted) setWallpaperPaths(resolved)
+      } catch (err) {
+        if (mounted) setWallpaperPaths(WALLPAPER_RELATIVE.map(p => `/${p}`))
+      }
+    })()
+    return () => { mounted = false }
+  }, [])
+  const colorPalette = [
+    '#FF0000', '#FFD700', '#00FF00', '#FFFFFF', '#0000FF', '#FF6B00',
+    '#9B59B6', '#E91E63', '#00BCD4', '#FF5722', '#8BC34A', '#FFC107',
+    '#34B27B', '#000000', '#607D8B', '#795548',
+  ];
+  
+  const [selectedColor, setSelectedColor] = useState('#ADADAD');
+  const [gradient, setGradient] = useState<string>(GRADIENTS[0]);
+  const [showCropDropdown, setShowCropDropdown] = useState(false);
+
+  const zoomEnabled = Boolean(selectedZoomDepth);
+  const trimEnabled = Boolean(selectedTrimId);
+  
+  const handleDeleteClick = () => {
+    if (selectedZoomId && onZoomDelete) {
+      onZoomDelete(selectedZoomId);
+    }
+  };
+
+  const handleTrimDeleteClick = () => {
+    if (selectedTrimId && onTrimDelete) {
+      onTrimDelete(selectedTrimId);
+    }
+  };
+
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    const file = files[0];
+    
+    // Validate file type - only allow JPG/JPEG
+    const validTypes = ['image/jpeg', 'image/jpg'];
+    if (!validTypes.includes(file.type)) {
+      toast.error('Invalid file type', {
+        description: 'Please upload a JPG or JPEG image file.',
+      });
+      event.target.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      if (dataUrl) {
+        setCustomImages(prev => [...prev, dataUrl]);
+        onWallpaperChange(dataUrl);
+        toast.success('Custom image uploaded successfully!');
+      }
+    };
+
+    reader.onerror = () => {
+      toast.error('Failed to upload image', {
+        description: 'There was an error reading the file.',
+      });
+    };
+
+    reader.readAsDataURL(file);
+    // Reset input so the same file can be selected again
+    event.target.value = '';
+  };
+
+  const handleRemoveCustomImage = (imageUrl: string, event: React.MouseEvent) => {
+    event.stopPropagation();
+    setCustomImages(prev => prev.filter(img => img !== imageUrl));
+    // If the removed image was selected, clear selection
+    if (selected === imageUrl) {
+      onWallpaperChange(wallpaperPaths[0] || WALLPAPER_RELATIVE[0]);
+    }
+  };
+
+  // Find selected annotation
+  const selectedAnnotation = selectedAnnotationId 
+    ? annotationRegions.find(a => a.id === selectedAnnotationId)
+    : null;
+
+  // If an annotation is selected, show annotation settings instead
+  if (selectedAnnotation && onAnnotationContentChange && onAnnotationTypeChange && onAnnotationStyleChange && onAnnotationDelete) {
+    return (
+      <AnnotationSettingsPanel
+        annotation={selectedAnnotation}
+        onContentChange={(content) => onAnnotationContentChange(selectedAnnotation.id, content)}
+        onTypeChange={(type) => onAnnotationTypeChange(selectedAnnotation.id, type)}
+        onStyleChange={(style) => onAnnotationStyleChange(selectedAnnotation.id, style)}
+        onFigureDataChange={onAnnotationFigureDataChange ? (figureData) => onAnnotationFigureDataChange(selectedAnnotation.id, figureData) : undefined}
+        onDelete={() => onAnnotationDelete(selectedAnnotation.id)}
+      />
+    );
+  }
+
+  return (
+    <div className="flex-[2] min-w-0 bg-[#09090b] border border-white/5 rounded-2xl p-4 flex flex-col shadow-xl h-full overflow-y-auto custom-scrollbar">
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <span className="text-sm font-medium text-slate-200">放大比例</span>
+          <div className="flex items-center gap-3">
+            {zoomEnabled && selectedZoomDepth && (
+              <span className="text-[10px] uppercase tracking-wider font-medium text-[#34B27B] bg-[#34B27B]/10 px-2 py-1 rounded-full">
+                {ZOOM_DEPTH_OPTIONS.find(o => o.depth === selectedZoomDepth)?.label} 激活
+              </span>
+            )}
+            <KeyboardShortcutsHelp />
+          </div>
+        </div>
+        <div className="grid grid-cols-6 gap-2">
+          {ZOOM_DEPTH_OPTIONS.map((option) => {
+            const isActive = selectedZoomDepth === option.depth;
+            return (
+              <Button
+                key={option.depth}
+                type="button"
+                disabled={!zoomEnabled}
+                onClick={() => onZoomDepthChange?.(option.depth)}
+                className={cn(
+                  "h-auto w-full rounded-xl border px-1 py-3 text-center shadow-sm transition-all flex flex-col items-center justify-center gap-1.5",
+                  "duration-200 ease-out",
+                  zoomEnabled ? "opacity-100 cursor-pointer" : "opacity-40 cursor-not-allowed",
+                  isActive
+                    ? "border-[#34B27B] bg-[#34B27B] text-white shadow-[#34B27B]/20 scale-105 ring-2 ring-[#34B27B]/20"
+                    : "border-white/5 bg-white/5 text-slate-400 hover:bg-white/10 hover:border-white/10 hover:text-slate-200"
+                )}
+              >
+                <span className={cn("text-sm font-semibold tracking-tight")}>{option.label}</span>
+              </Button>
+            );
+          })}
+        </div>
+        {!zoomEnabled && (
+          <p className="text-xs text-slate-500 mt-3 text-center">选择时间轴中的放大区域以调整比例</p>
+        )}
+        {zoomEnabled && (
+          <Button
+            onClick={handleDeleteClick}
+            variant="destructive"
+            size="sm"
+            className="mt-4 w-full gap-2 bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 hover:border-red-500/30 transition-all"
+          >
+            <Trash2 className="w-4 h-4" />
+            删除放大选区
+          </Button>
+        )}
+      </div>
+
+      {/* Trim Delete Section */}
+      <div className="mb-6">
+        {trimEnabled && (
+          <Button
+            onClick={handleTrimDeleteClick}
+            variant="destructive"
+            size="sm"
+            className="w-full gap-2 bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 hover:border-red-500/30 transition-all"
+          >
+            <Trash2 className="w-4 h-4" />
+            删除跳过片段
+          </Button>
+        )}
+      </div>
+
+      <div className="mb-6">
+        <div className="grid grid-cols-2 gap-3">
+          {/* Motion Blur Switch */}
+          <div className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5">
+            <div className="text-xs font-medium text-slate-200">动态模糊</div>
+            <Switch
+              checked={motionBlurEnabled}
+              onCheckedChange={onMotionBlurChange}
+              className="data-[state=checked]:bg-[#34B27B]"
+            />
+          </div>
+          {/* Blur Background Switch */}
+          <div className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5">
+            <div className="text-xs font-medium text-slate-200">背景模糊</div>
+            <Switch
+              checked={showBlur}
+              onCheckedChange={onBlurChange}
+              className="data-[state=checked]:bg-[#34B27B]"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="mb-4">
+        <div className="grid grid-cols-2 gap-2.5">
+          {/* Drop Shadow Slider */}
+          <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-medium text-slate-200">阴影</div>
+              <span className="text-[10px] text-slate-400 font-mono">{Math.round(shadowIntensity * 100)}%</span>
+            </div>
+            <Slider
+              value={[shadowIntensity]}
+              onValueChange={(values) => onShadowChange?.(values[0])}
+              min={0}
+              max={1}
+              step={0.01}
+              className="w-full [&_[role=slider]]:bg-[#34B27B] [&_[role=slider]]:border-[#34B27B]"
+            />
+          </div>
+          {/* Corner Roundness Slider */}
+          <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-medium text-slate-200">圆角</div>
+              <span className="text-[10px] text-slate-400 font-mono">{borderRadius}px</span>
+            </div>
+            <Slider
+              value={[borderRadius]}
+              onValueChange={(values) => onBorderRadiusChange?.(values[0])}
+              min={0}
+              max={16}
+              step={0.5}
+              className="w-full [&_[role=slider]]:bg-[#34B27B] [&_[role=slider]]:border-[#34B27B]"
+            />
+          </div>
+          {/* Padding Slider */}
+          <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-medium text-slate-200">内边距</div>
+              <span className="text-[10px] text-slate-400 font-mono">{padding}%</span>
+            </div>
+            <Slider
+              value={[padding]}
+              onValueChange={(values) => onPaddingChange?.(values[0])}
+              min={0}
+              max={100}
+              step={1}
+              className="w-full [&_[role=slider]]:bg-[#34B27B] [&_[role=slider]]:border-[#34B27B]"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="mb-4">
+        <Button
+          onClick={() => setShowCropDropdown(!showCropDropdown)}
+          variant="outline"
+          className="w-full gap-2 bg-white/5 text-slate-200 border-white/10 hover:bg-white/10 hover:border-white/20 hover:text-white h-9 transition-all"
+        >
+          <Crop className="w-4 h-4" />
+          区域裁切
+        </Button>
+      </div>
+      
+      {showCropDropdown && cropRegion && onCropChange && (
+        <>
+          <div 
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 animate-in fade-in duration-200"
+            onClick={() => setShowCropDropdown(false)}
+          />
+          <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[60] bg-[#09090b] rounded-2xl shadow-2xl border border-white/10 p-8 w-[90vw] max-w-5xl max-h-[90vh] overflow-auto animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <span className="text-xl font-bold text-slate-200">区域裁切</span>
+                <p className="text-sm text-slate-400 mt-2">拖拽边框以调整至合适尺寸</p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowCropDropdown(false)}
+                className="hover:bg-white/10 text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+            <CropControl
+              videoElement={videoElement || null}
+              cropRegion={cropRegion}
+              onCropChange={onCropChange}
+              aspectRatio={aspectRatio}
+            />
+            <div className="mt-6 flex justify-end">
+              <Button
+                onClick={() => setShowCropDropdown(false)}
+                size="lg"
+                className="bg-[#34B27B] hover:bg-[#34B27B]/90 text-white"
+              >
+                Done
+              </Button>
+            </div>
+          </div>
+        </>
+      )}
+
+      <Tabs defaultValue="image" className="flex-1 flex flex-col min-h-0">
+        <TabsList className="mb-4 bg-white/5 border border-white/5 p-1 w-full grid grid-cols-3 h-auto rounded-xl">
+          <TabsTrigger value="image" className="data-[state=active]:bg-[#34B27B] data-[state=active]:text-white text-slate-400 py-2 rounded-lg transition-all">图片</TabsTrigger>
+          <TabsTrigger value="color" className="data-[state=active]:bg-[#34B27B] data-[state=active]:text-white text-slate-400 py-2 rounded-lg transition-all">颜色</TabsTrigger>
+          <TabsTrigger value="gradient" className="data-[state=active]:bg-[#34B27B] data-[state=active]:text-white text-slate-400 py-2 rounded-lg transition-all">渐变</TabsTrigger>
+        </TabsList>
+        
+        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-2">
+          <TabsContent value="image" className="mt-0 space-y-3 px-2">
+            {/* Upload Button */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleImageUpload}
+              accept=".jpg,.jpeg,image/jpeg"
+              className="hidden"
+            />
+            <Button
+              onClick={() => fileInputRef.current?.click()}
+              variant="outline"
+              className="w-full gap-2 bg-white/5 text-slate-200 border-white/10 hover:bg-[#34B27B] hover:text-white hover:border-[#34B27B] transition-all"
+            >
+              <Upload className="w-4 h-4" />
+              上传自定义图片
+            </Button>
+
+            <div className="grid grid-cols-6 gap-2.5">
+              {/* Custom Images */}
+              {customImages.map((imageUrl, idx) => {
+                const isSelected = selected === imageUrl;
+                return (
+                  <div
+                    key={`custom-${idx}`}
+                    className={cn(
+                      "aspect-square w-12 h-12 rounded-md border-2 overflow-hidden cursor-pointer transition-all duration-200 relative group shadow-sm",
+                      isSelected
+                        ? "border-[#34B27B] ring-2 ring-[#34B27B]/30 scale-105 shadow-lg shadow-[#34B27B]/10"
+                        : "border-white/10 hover:border-[#34B27B]/40 hover:scale-105 opacity-80 hover:opacity-100 bg-white/5"
+                    )}
+                    style={{ backgroundImage: `url(${imageUrl})`, backgroundSize: "cover", backgroundPosition: "center" }}
+                    aria-label={`Custom Image ${idx + 1}`}
+                    onClick={() => onWallpaperChange(imageUrl)}
+                    role="button"
+                  >
+                    <button
+                      onClick={(e) => handleRemoveCustomImage(imageUrl, e)}
+                      className="absolute top-1 right-1 w-4 h-4 bg-red-500/90 hover:bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                      aria-label="Remove custom image"
+                    >
+                      <X className="w-2.5 h-2.5 text-white" />
+                    </button>
+                  </div>
+                );
+              })}
+
+              {/* Preset Wallpapers */}
+              {(wallpaperPaths.length > 0 ? wallpaperPaths : WALLPAPER_RELATIVE.map(p => `/${p}`)).map((path, idx) => {
+                const isSelected = (() => {
+                  if (!selected) return false;
+                  if (selected === path) return true;
+                  try {
+                    const clean = (s: string) => s.replace(/^file:\/\//, '').replace(/^\//, '')
+                    if (clean(selected).endsWith(clean(path))) return true;
+                    if (clean(path).endsWith(clean(selected))) return true;
+                  } catch {}
+                  return false;
+                })();
+                return (
+                  <div
+                    key={path}
+                    className={cn(
+                      "aspect-square w-12 h-12 rounded-md border-2 overflow-hidden cursor-pointer transition-all duration-200 shadow-sm",
+                      isSelected
+                        ? "border-[#34B27B] ring-2 ring-[#34B27B]/30 scale-105 shadow-lg shadow-[#34B27B]/10"
+                        : "border-white/10 hover:border-[#34B27B]/40 hover:scale-105 opacity-80 hover:opacity-100 bg-white/5"
+                    )}
+                    style={{ backgroundImage: `url(${path})`, backgroundSize: "cover", backgroundPosition: "center" }}
+                    aria-label={`Wallpaper ${idx + 1}`}
+                    onClick={() => onWallpaperChange(path)}
+                    role="button"
+                  />
+                )
+              })}
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="color" className="mt-0 px-2">
+            <div className="p-1">
+              <Block
+                color={selectedColor}
+                colors={colorPalette}
+                onChange={(color) => {
+                  setSelectedColor(color.hex);
+                  onWallpaperChange(color.hex);
+                }}
+                style={{
+                  width: '100%',
+                  borderRadius: '12px',
+                }}
+              />
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="gradient" className="mt-0 px-2">
+            <div className="grid grid-cols-6 gap-2.5">
+              {GRADIENTS.map((g, idx) => (
+                <div
+                  key={g}
+                  className={cn(
+                    "aspect-square w-12 h-12 rounded-md border-2 overflow-hidden cursor-pointer transition-all duration-200 shadow-sm",
+                    gradient === g 
+                      ? "border-[#34B27B] ring-2 ring-[#34B27B]/30 scale-105 shadow-lg shadow-[#34B27B]/10" 
+                      : "border-white/10 hover:border-[#34B27B]/40 hover:scale-105 opacity-80 hover:opacity-100 bg-white/5"
+                  )}
+                  style={{ background: g }}
+                  aria-label={`Gradient ${idx + 1}`}
+                  onClick={() => { setGradient(g); onWallpaperChange(g); }}
+                  role="button"
+                />
+              ))}
+            </div>
+          </TabsContent>
+        </div>
+      </Tabs>
+
+      <div className="mt-4 pt-4 border-t border-white/5">
+        <div className="mb-2 text-xs font-medium text-slate-400">视频质量</div>
+        {/* Export Quality Button Group */}
+        <div className="mb-2.5 bg-white/5 border border-white/5 p-1 w-full grid grid-cols-3 h-auto rounded-xl">
+          <button
+            onClick={() => onExportQualityChange?.('medium')}
+            className={cn(
+              "py-2 rounded-lg transition-all text-xs font-medium",
+              exportQuality === 'medium'
+                ? "bg-white text-black"
+                : "text-slate-400 hover:text-slate-200"
+            )}
+          >
+            低
+          </button>
+          <button
+            onClick={() => onExportQualityChange?.('good')}
+            className={cn(
+              "py-2 rounded-lg transition-all text-xs font-medium",
+              exportQuality === 'good'
+                ? "bg-white text-black"
+                : "text-slate-400 hover:text-slate-200"
+            )}
+          >
+            中
+          </button>
+          <button
+            onClick={() => onExportQualityChange?.('source')}
+            className={cn(
+              "py-2 rounded-lg transition-all text-xs font-medium",
+              exportQuality === 'source'
+                ? "bg-white text-black"
+                : "text-slate-400 hover:text-slate-200"
+            )}
+          >
+            高
+          </button>
+        </div>
+        
+        <Button
+          type="button"
+          size="lg"
+          onClick={onExport}
+          className="w-full py-6 text-lg font-semibold flex items-center justify-center gap-3 bg-[#34B27B] text-white rounded-xl shadow-lg shadow-[#34B27B]/20 hover:bg-[#34B27B]/90 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
+        >
+          <Download className="w-5 h-5" />
+          <span>导出视频</span>
+        </Button>
+        <div className="flex gap-2 mt-4">
+          <button
+            type="button"
+            onClick={() => {
+              window.electronAPI?.openExternalUrl('https://space.bilibili.com/619221106?spm_id_from=333.1007.0.0');
+            }}
+            className="flex-1 flex items-center justify-center gap-2 text-xs py-2"
+          >
+            {/* <Bug className="w-3 h-3 text-[#34B27B]" /> */}
+            <img src={BilibiliIcon} alt="" className="w-4 h-4 object-contain" />
+            <span>Subscribe Bilibili</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              window.electronAPI?.openExternalUrl('https://github.com/whistleStudio/OpenScreenW');
+            }}
+            className="flex-1 flex items-center justify-center gap-2 text-xs"
+          >
+            <Star className="w-3 h-3 text-yellow-400" />
+            <span>Star on GitHub</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
