@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import Block from '@uiw/react-color-block';
-import { Trash2, Download, Crop, X, Bug, Upload, Star } from "lucide-react";
+import { Trash2, Download, Crop, X, Upload, Star } from "lucide-react";
 import { toast } from "sonner";
 import type { ZoomDepth, CropRegion, AnnotationRegion, AnnotationType } from "./types";
 import { CropControl } from "./CropControl";
@@ -418,7 +418,7 @@ export function SettingsPanel({
                 size="lg"
                 className="bg-[#34B27B] hover:bg-[#34B27B]/90 text-white"
               >
-                Done
+                确定
               </Button>
             </div>
           </div>

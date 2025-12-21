@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import styles from "./LaunchWindow.module.css";
-import { useScreenRecorder } from "../../hooks/useScreenRecorder";
+import { useScreenRecorder, AudioChoice } from "../../hooks/useScreenRecorder";
 import { Button } from "../ui/button";
 import { BsRecordCircle } from "react-icons/bs";
 import { FaRegStopCircle } from "react-icons/fa";
-import { MdMonitor } from "react-icons/md";
+import { MdMonitor, MdKeyboardVoice, MdGraphicEq, MdVolumeUp, MdVolumeOff } from "react-icons/md";
 import { RxDragHandleDots2 } from "react-icons/rx";
 import { FaFolderMinus } from "react-icons/fa6";
 import { FiMinus, FiX } from "react-icons/fi";
@@ -12,10 +12,27 @@ import { ContentClamp } from "../ui/content-clamp";
 import { isMac } from "@/utils/platformUtils";
 
 export function LaunchWindow() {
-  const { recording, toggleRecording } = useScreenRecorder();
+  const { recording, toggleRecording, setAudioChoice } = useScreenRecorder({ audio: "both" });
   const [recordingStart, setRecordingStart] = useState<number | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [isMacPlatform, setIsMacPlatform] = useState(true);
+  const [audioSelectedIdx, setAudioSelectedIdx] = useState(0);
+
+  const audioChoiceList = [
+    { label: "所有音频", value: "both", icon: <><MdVolumeUp size={14} className="text-white" /></> },
+    { label: "仅系统", value: "system", icon: <MdGraphicEq size={14} className="text-white" /> },
+    { label: "仅麦克", value: "microphone", icon: <MdKeyboardVoice size={14} className="text-white" /> },
+    { label: "无音频", value: "none", icon: <MdVolumeOff size={14} className="text-white" /> },
+  ];
+
+  const switchAudioChoice = async () => {
+    const nextIdx = (audioSelectedIdx + 1) % audioChoiceList.length;
+    setAudioSelectedIdx(nextIdx);
+    setAudioChoice(audioChoiceList[nextIdx].value as AudioChoice);
+    if (window.electronAPI) {
+      await window.electronAPI.selectAudioIdx(nextIdx);
+    }
+  }
 
   useEffect(() => {
     let timer: NodeJS.Timeout | null = null;
@@ -57,11 +74,18 @@ export function LaunchWindow() {
         }
       }
     };
+    const checkSelectedAudioIdx = async () => {
+      if (window.electronAPI) {
+        const idx = await window.electronAPI.getAudioIdx();
+        setAudioSelectedIdx(idx);
+      }
+    }; 
     const checkPlatform = async () => {
       setIsMacPlatform(await isMac())
     }
 
     checkSelectedSource();
+    checkSelectedAudioIdx();
     checkPlatform();
     
     const interval = setInterval(checkSelectedSource, 500);
@@ -124,6 +148,18 @@ export function LaunchWindow() {
         >
           <MdMonitor size={14} className="text-white" />
           <ContentClamp truncateLength={6}>{selectedSource}</ContentClamp>
+        </Button>
+
+        <div className="w-px h-6 bg-white/30" />
+
+        <Button
+          variant="link"
+          size="sm"
+          className={`gap-1 text-white bg-transparent hover:bg-transparent px-0 flex-1 text-left text-xs ${styles.electronNoDrag}`}
+          onClick={switchAudioChoice}
+        >
+          {audioChoiceList[audioSelectedIdx].icon}
+          <span className="text-white">{audioChoiceList[audioSelectedIdx].label}</span>
         </Button>
 
         <div className="w-px h-6 bg-white/30" />

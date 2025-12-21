@@ -590,16 +590,16 @@ export default function VideoEditor() {
         const saveResult = await window.electronAPI.saveExportedVideo(arrayBuffer, fileName);
         
         if (saveResult.cancelled) {
-          toast.info('Export cancelled');
+          toast.info('导出已取消');
         } else if (saveResult.success) {
-          toast.success(`Video exported successfully to ${saveResult.path}`);
+          toast.success(`视频成功导出到 ${saveResult.path}`);
         } else {
-          setExportError(saveResult.message || 'Failed to save video');
-          toast.error(saveResult.message || 'Failed to save video');
+          setExportError(saveResult.message || '导出失败');
+          toast.error(saveResult.message || '导出失败');
         }
       } else {
-        setExportError(result.error || 'Export failed');
-        toast.error(result.error || 'Export failed');
+        setExportError(result.error || '导出失败');
+        toast.error(result.error || '导出失败');
       }
 
       if (wasPlaying) {
@@ -607,9 +607,9 @@ export default function VideoEditor() {
       }
     } catch (error) {
       console.error('Export error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage = error instanceof Error ? error.message : '未知错误';
       setExportError(errorMessage);
-      toast.error(`Export failed: ${errorMessage}`);
+      toast.error(`导出失败: ${errorMessage}`);
     } finally {
       setIsExporting(false);
       exporterRef.current = null;
@@ -619,7 +619,7 @@ export default function VideoEditor() {
   const handleCancelExport = useCallback(() => {
     if (exporterRef.current) {
       exporterRef.current.cancel();
-      toast.info('Export cancelled');
+      toast.info('导出已取消');
       setShowExportDialog(false);
       setIsExporting(false);
       setExportProgress(null);
@@ -630,7 +630,7 @@ export default function VideoEditor() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen bg-background">
-        <div className="text-foreground">Loading video...</div>
+        <div className="text-foreground">视频加载中...</div>
       </div>
     );
   }

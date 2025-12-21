@@ -14,6 +14,15 @@
 
 </p>
 
+## 优化
+- 增加音频采集（系统/麦克风/所有/无）
+- delete快捷键操作
+- 窗口操作行为
+- 托盘操作行为
+- 预览窗内注释拖拽性能
+- 安装包体积
+
+
 ## 核心功能
 - 录制整个屏幕或指定应用
 - 添加手动缩放（支持自定义缩放深度）
@@ -25,15 +34,12 @@
 - 剪辑视频片段
 - 导出不同的画面比例和分辨率
 
-## 优化
-- delete快捷键操作
-- 窗口操作行为
-- 托盘操作行为
+
 
 <p align="center">
-	<img src="preview.png" alt="OpenScreen 应用预览" style="height: 320px; margin-right: 12px;" />
-	<img src="preview2.png" alt="OpenScreen 应用预览 2" style="height: 320px; margin-right: 12px;" />
-	<img src="preview3.png" alt="OpenScreen 应用预览 3" style="height: 320px; margin-right: 12px;" />
-	<img src="preview4.png" alt="OpenScreen 应用预览 4" style="height: 320px; margin-right: 12px;" />
+	<img src="preview.png" alt="OpenScreenW 应用预览" style="height: 320px; margin-right: 12px;" />
+	<img src="preview2.png" alt="OpenScreenW 应用预览 2" style="height: 320px; margin-right: 12px;" />
+	<img src="preview3.png" alt="OpenScreenW 应用预览 3" style="height: 320px; margin-right: 12px;" />
+	<img src="preview4.png" alt="OpenScreenW 应用预览 4" style="height: 320px; margin-right: 12px;" />
 </p>
 

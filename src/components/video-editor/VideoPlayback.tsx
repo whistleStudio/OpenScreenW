@@ -788,6 +788,15 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(({
     ? { backgroundImage: `url(${resolvedWallpaper || ''})` }
     : { background: resolvedWallpaper || '' };
 
+  // 缓存容器尺寸，避免频繁读取 DOM
+  const containerSize = useMemo(() => {
+    if (!overlayRef.current) return { width: 800, height:  600 };
+    return {
+      width: overlayRef.current.clientWidth,
+      height: overlayRef.current. clientHeight,
+    };
+  }, [pixiReady, videoReady, aspectRatio]); // 只在必要时重新计算  
+
   return (
     <div className="relative rounded-sm overflow-hidden" style={{ width: '100%', aspectRatio: formatAspectRatioForCSS(aspectRatio) }}>
       {/* Background layer - always render as DOM element with blur */}
@@ -857,8 +866,8 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(({
                 key={annotation.id}
                 annotation={annotation}
                 isSelected={annotation.id === selectedAnnotationId}
-                containerWidth={overlayRef.current?.clientWidth || 800}
-                containerHeight={overlayRef.current?.clientHeight || 600}
+                containerWidth={containerSize.width}
+                containerHeight={containerSize.height}
                 onPositionChange={(id, position) => onAnnotationPositionChange?.(id, position)}
                 onSizeChange={(id, size) => onAnnotationSizeChange?.(id, size)}
                 onClick={handleAnnotationClick}

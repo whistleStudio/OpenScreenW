@@ -51,6 +51,9 @@ const recordingTrayIcon = getTrayIcon('rec-button.png');
 
 function createWindow() {
   mainWindow = createHudOverlayWindow()
+  // mainWindow.webContents.openDevTools({ // 独立打开控制台
+  //   mode: 'detach'
+  // })
 }
 
 function createTray() {
@@ -130,7 +133,7 @@ function createEditorWindowWrapper() {
       type: 'question',
       buttons: ['取消', '确定'],
       defaultId: 0,
-      cancelId: 1,
+      cancelId: 0,
       title: '确认关闭',
       message: '确定要关闭编辑器吗？未保存内容将丢失。'
     });

@@ -5,6 +5,7 @@ import path from 'node:path'
 import { RECORDINGS_DIR } from '../main'
 
 let selectedSource: any = null
+let selectedAudioIdx = 0
 
 export function registerIpcHandlers(
   createEditorWindow: () => void,
@@ -54,7 +55,13 @@ export function registerIpcHandlers(
     createEditorWindow()
   })
 
+  ipcMain.handle('select-audio-idx', (_, idx: number) => {
+    selectedAudioIdx = idx;
+  })
 
+  ipcMain.handle('get-audio-idx', () => {
+    return selectedAudioIdx;
+  })
 
   ipcMain.handle('store-recorded-video', async (_, videoData: ArrayBuffer, fileName: string) => {
     try {
