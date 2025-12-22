@@ -131,8 +131,8 @@ export class VideoExporter {
         await this.initializeAudioEncoder(audioInfo.sampleRate, audioInfo.numberOfChannels);
       }
 
-      // Initialize muxer with audio support
-      this.muxer = new VideoMuxer(this.config, hasAudio);
+      // Initialize muxer with audio support (after audio encoder so we have the codec)
+      this.muxer = new VideoMuxer(this.config, hasAudio, this.selectedAudioCodec);
       await this.muxer.initialize();
 
       // Get the video element for frame extraction
