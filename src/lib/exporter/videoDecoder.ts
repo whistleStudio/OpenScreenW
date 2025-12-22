@@ -23,7 +23,7 @@ export class VideoFileDecoder {
           width: video.videoWidth,
           height: video.videoHeight,
           duration: video.duration,
-          frameRate: 60,
+          frameRate: 25,
           codec: 'avc1.640033',
         };
 

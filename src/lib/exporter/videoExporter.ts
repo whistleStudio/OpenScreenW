@@ -307,8 +307,8 @@ export class VideoExporter {
       height: this.config.height,
       bitrate: this.config.bitrate,
       framerate: this.config.frameRate,
-      latencyMode: 'realtime',
-      bitrateMode: 'variable',
+      latencyMode: 'quality',
+      bitrateMode: 'constant',
       hardwareAcceleration: 'prefer-hardware',
     };
 
