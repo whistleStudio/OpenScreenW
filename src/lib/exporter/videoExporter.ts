@@ -1,5 +1,5 @@
 import type { ExportConfig, ExportProgress, ExportResult } from './types';
-import { VideoFileDecoder } from './videoDecoder';
+import { FastVideoDecoder } from './videoDecoder';
 import { FrameRenderer } from './frameRenderer';
 import { VideoMuxer } from './muxer';
 import type { ZoomRegion, CropRegion, TrimRegion, AnnotationRegion } from '@/components/video-editor/types';
@@ -25,14 +25,14 @@ interface VideoExporterConfig extends ExportConfig {
 
 export class VideoExporter {
   private config: VideoExporterConfig;
-  private decoder: VideoFileDecoder | null = null;
+  private decoder: FastVideoDecoder | null = null;
   private renderer: FrameRenderer | null = null;
   private encoder: VideoEncoder | null = null;
   private muxer: VideoMuxer | null = null;
   private cancelled = false;
   private encodeQueue = 0;
   // Increased queue size for better throughput with hardware encoding
-  private readonly MAX_ENCODE_QUEUE = 120;
+  private readonly MAX_ENCODE_QUEUE = 240; // Increased from 120 to 240
   private videoDescription: Uint8Array | undefined;
   private videoColorSpace: VideoColorSpaceInit | undefined;
   // Track muxing promises for parallel processing
@@ -73,13 +73,37 @@ export class VideoExporter {
     return sourceTimeMs;
   }
 
+  /**
+   * Pre-build frame number to source video time mapping table
+   * This avoids recalculating time mappings for every frame during export
+   */
+  private buildTimeMap(totalFrames: number): Map<number, number> {
+    const timeMap = new Map<number, number>();
+    const trimRegions = this.config.trimRegions || [];
+    const sortedTrims = [...trimRegions].sort((a, b) => a.startMs - b.startMs);
+    
+    for (let frameIdx = 0; frameIdx < totalFrames; frameIdx++) {
+      const effectiveTimeMs = (frameIdx / this.config.frameRate) * 1000;
+      let sourceTimeMs = effectiveTimeMs;
+      
+      for (const trim of sortedTrims) {
+        if (sourceTimeMs < trim.startMs) break;
+        sourceTimeMs += (trim.endMs - trim.startMs);
+      }
+      
+      timeMap.set(frameIdx, sourceTimeMs);
+    }
+    
+    return timeMap;
+  }
+
   async export(): Promise<ExportResult> {
     try {
       this.cleanup();
       this.cancelled = false;
 
-      // Initialize decoder and load video
-      this.decoder = new VideoFileDecoder();
+      // Initialize decoder and load video using FastVideoDecoder
+      this.decoder = new FastVideoDecoder();
       const videoInfo = await this.decoder.loadVideo(this.config.videoUrl);
 
       // Initialize frame renderer
@@ -110,12 +134,6 @@ export class VideoExporter {
       this.muxer = new VideoMuxer(this.config, false);
       await this.muxer.initialize();
 
-      // Get the video element for frame extraction
-      const videoElement = this.decoder.getVideoElement();
-      if (!videoElement) {
-        throw new Error('Video element not available');
-      }
-
       // Calculate effective duration and frame count (excluding trim regions)
       const effectiveDuration = this.getEffectiveDuration(videoInfo.duration);
       const totalFrames = Math.ceil(effectiveDuration * this.config.frameRate);
@@ -124,88 +142,82 @@ export class VideoExporter {
       console.log('[VideoExporter] Effective duration:', effectiveDuration, 's');
       console.log('[VideoExporter] Total frames to export:', totalFrames);
 
-      // Process frames continuously without batching delays
+      // Pre-build time mapping table to avoid per-frame calculations
+      const timeMap = this.buildTimeMap(totalFrames);
+      
+      // Process frames with batch prefetching
       const frameDuration = 1_000_000 / this.config.frameRate; // in microseconds
+      const PREFETCH_BATCH = 60; // Prefetch 60 frames at a time
       let frameIndex = 0;
-      const timeStep = 1 / this.config.frameRate;
 
       while (frameIndex < totalFrames && !this.cancelled) {
-        const i = frameIndex;
-        const timestamp = i * frameDuration;
-
-        // Map effective time to source time (accounting for trim regions)
-        const effectiveTimeMs = (i * timeStep) * 1000;
-        const sourceTimeMs = this.mapEffectiveToSourceTime(effectiveTimeMs);
-        const videoTime = sourceTimeMs / 1000;
-          
-        // Seek if needed or wait for first frame to be ready
-        const needsSeek = Math.abs(videoElement.currentTime - videoTime) > 0.001;
-
-        if (needsSeek) {
-          // Attach listener BEFORE setting currentTime to avoid race condition
-          const seekedPromise = new Promise<void>(resolve => {
-            videoElement.addEventListener('seeked', () => resolve(), { once: true });
-          });
-          
-          videoElement.currentTime = videoTime;
-          await seekedPromise;
-        } else if (i === 0) {
-          // Only for the very first frame, wait for it to be ready
-          await new Promise<void>(resolve => {
-            videoElement.requestVideoFrameCallback(() => resolve());
-          });
-        }
-
-        // Create a VideoFrame from the video element (on GPU!)
-        const videoFrame = new VideoFrame(videoElement, {
-          timestamp,
-        });
-
-        // Render the frame with all effects using source timestamp
-        const sourceTimestamp = sourceTimeMs * 1000; // Convert to microseconds
-        await this.renderer!.renderFrame(videoFrame, sourceTimestamp);
+        const batchStart = frameIndex;
+        const batchEnd = Math.min(frameIndex + PREFETCH_BATCH, totalFrames);
         
-        videoFrame.close();
-
-        const canvas = this.renderer!.getCanvas();
-
-        // Create VideoFrame from canvas on GPU without reading pixels
-        // @ts-ignore - colorSpace not in TypeScript definitions but works at runtime
-        const exportFrame = new VideoFrame(canvas, {
-          timestamp,
-          duration: frameDuration,
-          colorSpace: {
-            primaries: 'bt709',
-            transfer: 'iec61966-2-1',
-            matrix: 'rgb',
-            fullRange: true,
-          },
-        });
-
-        // Check encoder queue before encoding to keep it full
-        while (this.encodeQueue >= this.MAX_ENCODE_QUEUE && !this.cancelled) {
-          await new Promise(resolve => setTimeout(resolve, 0));
+        // Batch prefetch frames
+        const prefetchPromises: Promise<VideoFrame | null>[] = [];
+        for (let i = batchStart; i < batchEnd; i++) {
+          const sourceTimeMs = timeMap.get(i)!;
+          prefetchPromises.push(this.decoder!.getFrameAtTime(sourceTimeMs));
         }
-
-        if (this.encoder && this.encoder.state === 'configured') {
-          this.encodeQueue++;
-          this.encoder.encode(exportFrame, { keyFrame: i % 150 === 0 });
-        } else {
-          console.warn(`[Frame ${i}] Encoder not ready! State: ${this.encoder?.state}`);
-        }
-
-        exportFrame.close();
-
-        frameIndex++;
-
-        // Update progress
-        if (this.config.onProgress) {
-          this.config.onProgress({
-            currentFrame: frameIndex,
-            totalFrames,
-            percentage: (frameIndex / totalFrames) * 100,
-            estimatedTimeRemaining: 0,
+        
+        const prefetchedFrames = await Promise.all(prefetchPromises);
+        
+        // Process each frame in the batch
+        for (let i = 0; i < prefetchedFrames.length && !this.cancelled; i++) {
+          const videoFrame = prefetchedFrames[i];
+          if (!videoFrame) {
+            console.warn(`[VideoExporter] Frame ${batchStart + i} is null, skipping`);
+            continue;
+          }
+          
+          const timestamp = (batchStart + i) * frameDuration;
+          const sourceTimeMs = timeMap.get(batchStart + i)!;
+          
+          // Render the frame with all effects using source timestamp
+          const sourceTimestamp = sourceTimeMs * 1000; // Convert to microseconds
+          await this.renderer!.renderFrame(videoFrame, sourceTimestamp);
+          
+          const canvas = this.renderer!.getCanvas();
+          
+          // Create VideoFrame from canvas for encoding
+          const exportFrame = new VideoFrame(canvas, {
+            timestamp,
+            duration: frameDuration,
+            // @ts-ignore - colorSpace not in TypeScript definitions but works at runtime
+            colorSpace: {
+              primaries: 'bt709',
+              transfer: 'iec61966-2-1',
+              matrix: 'rgb',
+              fullRange: true,
+            },
           });
+          
+          // Wait for encode queue to have space
+          while (this.encodeQueue >= this.MAX_ENCODE_QUEUE && !this.cancelled) {
+            await new Promise(resolve => setTimeout(resolve, 1));
+          }
+          
+          // Encode frame
+          if (this.encoder && this.encoder.state === 'configured') {
+            this.encodeQueue++;
+            this.encoder.encode(exportFrame, { 
+              keyFrame: (batchStart + i) % 150 === 0 
+            });
+          }
+          
+          exportFrame.close();
+          
+          // Update progress
+          frameIndex++;
+          if (this.config.onProgress) {
+            this.config.onProgress({
+              currentFrame: frameIndex,
+              totalFrames,
+              percentage: (frameIndex / totalFrames) * 100,
+              estimatedTimeRemaining: 0,
+            });
+          }
         }
       }
 
@@ -272,7 +284,7 @@ export class VideoExporter {
 
               const metadata: EncodedVideoChunkMetadata = {
                 decoderConfig: {
-                  codec: this.config.codec || 'avc1.640033',
+                  codec: this.config.codec || 'avc1.42001f', // Use Baseline Profile
                   codedWidth: this.config.width,
                   codedHeight: this.config.height,
                   description: this.videoDescription,
@@ -299,7 +311,7 @@ export class VideoExporter {
       },
     });
 
-    const codec = this.config.codec || 'avc1.640033';
+    const codec = this.config.codec || 'avc1.42001f'; // Use H.264 Baseline Profile for better compatibility
     
     const encoderConfig: VideoEncoderConfig = {
       codec,
@@ -307,8 +319,8 @@ export class VideoExporter {
       height: this.config.height,
       bitrate: this.config.bitrate,
       framerate: this.config.frameRate,
-      latencyMode: 'quality',
-      bitrateMode: 'constant',
+      latencyMode: 'quality', // Keep quality for better output
+      bitrateMode: 'variable', // VBR is faster than CBR
       hardwareAcceleration: 'prefer-hardware',
     };
 

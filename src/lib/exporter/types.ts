@@ -26,3 +26,10 @@ export interface VideoFrameData {
 }
 
 export type ExportQuality = 'medium' | 'good' | 'source';
+
+// MP4Box global type declarations
+declare global {
+  interface Window {
+    MP4Box: any;
+  }
+}

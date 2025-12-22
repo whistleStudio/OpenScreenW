@@ -50,6 +50,9 @@ export class FrameRenderer {
   private animationState: AnimationState;
   private layoutCache: any = null;
   private currentVideoTime = 0;
+  // Background pre-rendering optimization
+  private backgroundRendered = false;
+  private backgroundImageData: ImageData | null = null;
 
   constructor(config: FrameRenderConfig) {
     this.config = config;
@@ -131,6 +134,28 @@ export class FrameRenderer {
     this.maskGraphics = new Graphics();
     this.videoContainer.addChild(this.maskGraphics);
     this.videoContainer.mask = this.maskGraphics;
+
+    // Pre-render background to ImageData for faster compositing
+    await this.prerenderBackground();
+  }
+
+  /**
+   * Pre-render background to ImageData for optimized compositing
+   * This avoids re-drawing the background from scratch for every frame
+   */
+  private async prerenderBackground(): Promise<void> {
+    if (!this.backgroundSprite || this.backgroundRendered) return;
+    
+    const bgCanvas = this.backgroundSprite as any as HTMLCanvasElement;
+    const tempCtx = bgCanvas.getContext('2d', { willReadFrequently: true });
+    
+    if (tempCtx) {
+      this.backgroundImageData = tempCtx.getImageData(
+        0, 0, this.config.width, this.config.height
+      );
+      this.backgroundRendered = true;
+      console.log('[FrameRenderer] Background pre-rendered to ImageData');
+    }
   }
 
   private async setupBackground(): Promise<void> {
@@ -464,13 +489,23 @@ export class FrameRenderer {
     // Clear composite canvas
     ctx.clearRect(0, 0, w, h);
 
-    // Step 1: Draw background layer (with optional blur, not affected by zoom)
-    if (this.backgroundSprite) {
+    // Step 1: Draw background layer using pre-rendered ImageData (with optional blur)
+    if (this.backgroundImageData) {
+      if (this.config.showBlur) {
+        ctx.save();
+        ctx.filter = 'blur(6px)'; // Canvas blur is weaker than CSS
+        ctx.putImageData(this.backgroundImageData, 0, 0);
+        ctx.restore();
+      } else {
+        ctx.putImageData(this.backgroundImageData, 0, 0);
+      }
+    } else if (this.backgroundSprite) {
+      // Fallback to direct canvas draw if ImageData not available
       const bgCanvas = this.backgroundSprite as any as HTMLCanvasElement;
       
       if (this.config.showBlur) {
         ctx.save();
-        ctx.filter = 'blur(6px)'; // Canvas blur is weaker than CSS
+        ctx.filter = 'blur(6px)';
         ctx.drawImage(bgCanvas, 0, 0, w, h);
         ctx.restore();
       } else {
@@ -519,6 +554,8 @@ export class FrameRenderer {
       this.videoSprite = null;
     }
     this.backgroundSprite = null;
+    this.backgroundImageData = null;
+    this.backgroundRendered = false;
     if (this.app) {
       this.app.destroy(true, { children: true, texture: true, textureSource: true });
       this.app = null;
