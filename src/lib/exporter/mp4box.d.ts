@@ -2,6 +2,9 @@
 // Since mp4box doesn't provide official TypeScript types, we declare minimal types here
 
 declare module 'mp4box' {
-  export function createFile(): any;
-  // Add other MP4Box exports as needed
+  const MP4Box: {
+    createFile(): any;
+    // Add other MP4Box exports as needed
+  };
+  export default MP4Box;
 }
