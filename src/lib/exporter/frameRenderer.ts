@@ -100,7 +100,7 @@ export class FrameRenderer {
 
     // Setup blur filter for video container
     this.blurFilter = new BlurFilter();
-    this.blurFilter.quality = 3;
+    this.blurFilter.quality = 1; // Reduced quality for faster export
     this.blurFilter.resolution = this.app.renderer.resolution;
     this.blurFilter.blur = 0;
     this.videoContainer.filters = [this.blurFilter];

@@ -518,13 +518,13 @@ export default function VideoEditor() {
           }
         }
 
-        // Calculate visually lossless bitrate matching screen recording optimization
+        // Optimized bitrate for faster encoding with acceptable quality
         const totalPixels = exportWidth * exportHeight;
-        bitrate = 30_000_000;
+        bitrate = 15_000_000; // Reduced from 30 Mbps
         if (totalPixels > 1920 * 1080 && totalPixels <= 2560 * 1440) {
-          bitrate = 50_000_000;
+          bitrate = 25_000_000; // Reduced from 50 Mbps
         } else if (totalPixels > 2560 * 1440) {
-          bitrate = 80_000_000;
+          bitrate = 40_000_000; // Reduced from 80 Mbps
         }
       } else {
         // Use quality-based target resolution
@@ -534,14 +534,14 @@ export default function VideoEditor() {
         exportHeight = Math.floor(targetHeight / 2) * 2; // Ensure even
         exportWidth = Math.floor((exportHeight * aspectRatioValue) / 2) * 2; // Ensure even
         
-        // Adjust bitrate for lower resolutions
+        // Optimized bitrate for faster encoding
         const totalPixels = exportWidth * exportHeight;
         if (totalPixels <= 1280 * 720) {
-          bitrate = 10_000_000; // 10 Mbps for 720p
+          bitrate = 6_000_000; // Reduced from 10 Mbps
         } else if (totalPixels <= 1920 * 1080) {
-          bitrate = 20_000_000; // 20 Mbps for 1080p
+          bitrate = 12_000_000; // Reduced from 20 Mbps
         } else {
-          bitrate = 30_000_000;
+          bitrate = 18_000_000; // Reduced from 30 Mbps
         }
       }
 
@@ -560,7 +560,7 @@ export default function VideoEditor() {
         height: exportHeight,
         frameRate: 30, // Use 30fps for faster export while maintaining good quality
         bitrate,
-        codec: 'avc1.640033',
+        codec: 'avc1.42E01E', // H.264 Baseline Profile for faster encoding
         wallpaper,
         zoomRegions,
         trimRegions,

@@ -32,7 +32,7 @@ export class VideoExporter {
   private cancelled = false;
   private encodeQueue = 0;
   // Increased queue size for better throughput with hardware encoding
-  private readonly MAX_ENCODE_QUEUE = 120;
+  private readonly MAX_ENCODE_QUEUE = 240; // Doubled for faster processing
   private videoDescription: Uint8Array | undefined;
   private videoColorSpace: VideoColorSpaceInit | undefined;
   // Track muxing promises for parallel processing
@@ -200,8 +200,8 @@ export class VideoExporter {
 
         frameIndex++;
 
-        // Update progress
-        if (this.config.onProgress) {
+        // Update progress every 10 frames to reduce overhead
+        if (this.config.onProgress && frameIndex % 10 === 0) {
           this.config.onProgress({
             currentFrame: frameIndex,
             totalFrames,
@@ -213,6 +213,16 @@ export class VideoExporter {
 
       if (this.cancelled) {
         return { success: false, error: 'Export cancelled' };
+      }
+
+      // Send final progress update
+      if (this.config.onProgress) {
+        this.config.onProgress({
+          currentFrame: totalFrames,
+          totalFrames,
+          percentage: 100,
+          estimatedTimeRemaining: 0,
+        });
       }
 
       // Finalize encoding
@@ -274,7 +284,7 @@ export class VideoExporter {
 
               const metadata: EncodedVideoChunkMetadata = {
                 decoderConfig: {
-                  codec: this.config.codec || 'avc1.640033',
+                  codec: this.config.codec || 'avc1.42E01E',
                   codedWidth: this.config.width,
                   codedHeight: this.config.height,
                   description: this.videoDescription,
@@ -301,7 +311,7 @@ export class VideoExporter {
       },
     });
 
-    const codec = this.config.codec || 'avc1.640033';
+    const codec = this.config.codec || 'avc1.42E01E'; // H.264 Baseline Profile for faster encoding
     
     const encoderConfig: VideoEncoderConfig = {
       codec,
