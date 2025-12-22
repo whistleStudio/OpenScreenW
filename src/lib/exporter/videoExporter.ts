@@ -146,25 +146,26 @@ export class VideoExporter {
         const timeDiff = Math.abs(videoElement.currentTime - videoTime);
         const needsSeek = timeDiff > SEEK_THRESHOLD;
 
-        if (needsSeek) {
-          // Attach listener BEFORE setting currentTime to avoid race condition
+        if (i === 0) {
+          // First frame: ensure video is ready
+          videoElement.currentTime = videoTime;
+          await new Promise<void>(resolve => {
+            videoElement.requestVideoFrameCallback(() => resolve());
+          });
+        } else if (needsSeek) {
+          // Significant time jump: full seek with event wait
           const seekedPromise = new Promise<void>(resolve => {
             videoElement.addEventListener('seeked', () => resolve(), { once: true });
           });
           
           videoElement.currentTime = videoTime;
           await seekedPromise;
-        } else if (i === 0) {
-          // Only for the very first frame, wait for it to be ready
-          await new Promise<void>(resolve => {
-            videoElement.requestVideoFrameCallback(() => resolve());
-          });
         } else {
-          // For consecutive frames, just set time without waiting for seek event
-          // This is much faster as it avoids the seek event overhead
+          // Consecutive frames: fast path without seek event
+          // Set time directly and yield to event loop for frame readiness
           videoElement.currentTime = videoTime;
-          // Small delay to allow frame to be ready
-          await new Promise(resolve => setTimeout(resolve, 0));
+          // Minimal yield - may need adjustment based on system performance
+          await new Promise(resolve => requestAnimationFrame(() => resolve(undefined)));
         }
 
         // Create a VideoFrame from the video element (on GPU!)
