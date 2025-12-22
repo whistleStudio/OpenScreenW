@@ -560,7 +560,7 @@ export default function VideoEditor() {
         height: exportHeight,
         frameRate: 30, // Use 30fps for faster export while maintaining good quality
         bitrate,
-        codec: 'avc1.42E01E', // H.264 Baseline Profile for faster encoding
+        // codec is not specified - let videoExporter auto-detect the best supported codec
         wallpaper,
         zoomRegions,
         trimRegions,

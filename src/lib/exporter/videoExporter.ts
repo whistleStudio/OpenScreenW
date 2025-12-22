@@ -244,6 +244,7 @@ export class VideoExporter {
     this.muxingPromises = [];
     this.chunkCount = 0;
     let videoDescription: Uint8Array | undefined;
+    let selectedCodec: string | undefined;
 
     this.encoder = new VideoEncoder({
       output: (chunk, meta) => {
@@ -275,7 +276,7 @@ export class VideoExporter {
 
               const metadata: EncodedVideoChunkMetadata = {
                 decoderConfig: {
-                  codec: this.config.codec || 'avc1.42E01E',
+                  codec: selectedCodec || this.config.codec || 'avc1.640033',
                   codedWidth: this.config.width,
                   codedHeight: this.config.height,
                   description: this.videoDescription,
@@ -302,38 +303,60 @@ export class VideoExporter {
       },
     });
 
-    const codec = this.config.codec || 'avc1.42E01E'; // H.264 Baseline Profile for faster encoding
+    // Try codecs in order of preference: Baseline (faster) -> Main -> High (better quality)
+    const codecCandidates = [
+      'avc1.42E01E', // H.264 Baseline Profile - fastest encoding
+      'avc1.4D401E', // H.264 Main Profile - good balance
+      'avc1.640033', // H.264 High Profile - best quality (original)
+    ];
+
+    let encoderConfig: VideoEncoderConfig | null = null;
     
-    const encoderConfig: VideoEncoderConfig = {
-      codec,
-      width: this.config.width,
-      height: this.config.height,
-      bitrate: this.config.bitrate,
-      framerate: this.config.frameRate,
-      latencyMode: 'realtime',
-      bitrateMode: 'variable',
-      hardwareAcceleration: 'prefer-hardware',
-    };
-
-    // Check hardware support first
-    const hardwareSupport = await VideoEncoder.isConfigSupported(encoderConfig);
-
-    if (hardwareSupport.supported) {
-      // Use hardware encoding
-      console.log('[VideoExporter] Using hardware acceleration');
-      this.encoder.configure(encoderConfig);
-    } else {
-      // Fall back to software encoding
-      console.log('[VideoExporter] Hardware not supported, using software encoding');
-      encoderConfig.hardwareAcceleration = 'prefer-software';
-      
-      const softwareSupport = await VideoEncoder.isConfigSupported(encoderConfig);
-      if (!softwareSupport.supported) {
-        throw new Error('Video encoding not supported on this system');
-      }
-      
-      this.encoder.configure(encoderConfig);
+    // If user specified a codec, try it first
+    if (this.config.codec) {
+      codecCandidates.unshift(this.config.codec);
     }
+
+    // Try each codec until one is supported
+    for (const codec of codecCandidates) {
+      const testConfig: VideoEncoderConfig = {
+        codec,
+        width: this.config.width,
+        height: this.config.height,
+        bitrate: this.config.bitrate,
+        framerate: this.config.frameRate,
+        latencyMode: 'realtime',
+        bitrateMode: 'variable',
+        hardwareAcceleration: 'prefer-hardware',
+      };
+
+      // Check hardware support first
+      const hardwareSupport = await VideoEncoder.isConfigSupported(testConfig);
+
+      if (hardwareSupport.supported) {
+        console.log(`[VideoExporter] Using codec ${codec} with hardware acceleration`);
+        encoderConfig = testConfig;
+        selectedCodec = codec;
+        break;
+      }
+
+      // Try software encoding
+      testConfig.hardwareAcceleration = 'prefer-software';
+      const softwareSupport = await VideoEncoder.isConfigSupported(testConfig);
+
+      if (softwareSupport.supported) {
+        console.log(`[VideoExporter] Using codec ${codec} with software encoding`);
+        encoderConfig = testConfig;
+        selectedCodec = codec;
+        break;
+      }
+    }
+
+    if (!encoderConfig) {
+      throw new Error('No supported video codec found on this system. Tried: ' + codecCandidates.join(', '));
+    }
+
+    this.encoder.configure(encoderConfig);
   }
 
   cancel(): void {
