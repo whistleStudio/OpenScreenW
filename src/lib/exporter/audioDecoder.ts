@@ -23,12 +23,13 @@ export class AudioFileDecoder {
       this.audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
 
       this.info = {
-        codec: 'opus', // WebM typically uses Opus
+        codec: 'decoded', // Codec is abstracted after decoding to PCM
         sampleRate: this.audioBuffer.sampleRate,
         numberOfChannels: this.audioBuffer.numberOfChannels,
         duration: this.audioBuffer.duration,
       };
 
+      console.log('[AudioDecoder] Audio loaded successfully');
       return this.info;
     } catch (error) {
       console.warn('[AudioDecoder] Failed to decode audio:', error);

@@ -479,7 +479,8 @@ export class VideoExporter {
     }
 
     const sampleRate = audioInfo.sampleRate;
-    const frameDuration = 1024; // Standard AAC frame size
+    // Frame size depends on codec: AAC uses 1024, Opus can use 960
+    const frameDuration = this.selectedAudioCodec?.includes('mp4a') ? 1024 : 960;
     const totalSamples = Math.floor(effectiveDuration * sampleRate);
     let sampleIndex = 0;
 
@@ -495,14 +496,14 @@ export class VideoExporter {
         continue;
       }
 
-      // Create AudioData from samples
+      // Create AudioData from samples (f32-planar format uses non-interleaved data)
       const audioData = new AudioData({
         format: 'f32-planar',
         sampleRate,
         numberOfFrames: samples[0].length,
         numberOfChannels: samples.length,
         timestamp: (sampleIndex / sampleRate) * 1_000_000, // microseconds
-        data: this.interleaveChannels(samples),
+        data: this.concatChannels(samples), // Non-interleaved data for planar format
       });
 
       // Wait if encoder queue is full
@@ -520,18 +521,18 @@ export class VideoExporter {
     }
   }
 
-  private interleaveChannels(channels: Float32Array[]): Float32Array {
-    const numChannels = channels.length;
-    const numFrames = channels[0].length;
-    const interleaved = new Float32Array(numChannels * numFrames);
-
-    for (let frame = 0; frame < numFrames; frame++) {
-      for (let channel = 0; channel < numChannels; channel++) {
-        interleaved[frame * numChannels + channel] = channels[channel][frame];
-      }
+  private concatChannels(channels: Float32Array[]): Float32Array {
+    // For planar format, concatenate channels sequentially (not interleaved)
+    const totalLength = channels.reduce((sum, ch) => sum + ch.length, 0);
+    const concatenated = new Float32Array(totalLength);
+    
+    let offset = 0;
+    for (const channel of channels) {
+      concatenated.set(channel, offset);
+      offset += channel.length;
     }
-
-    return interleaved;
+    
+    return concatenated;
   }
 
   cancel(): void {
