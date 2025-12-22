@@ -1,4 +1,4 @@
-import MP4BoxModule from 'mp4box';
+import * as MP4Box from 'mp4box';
 
 export interface DecodedVideoInfo {
   width: number;
@@ -91,7 +91,7 @@ export class FastVideoDecoder {
     }
     
     // 2. Use MP4Box to parse container (imported from npm package)
-    this.mp4File = MP4BoxModule.createFile();
+    this.mp4File = MP4Box.createFile();
     
     return new Promise((resolve, reject) => {
       this.mp4File.onReady = (info: any) => {
