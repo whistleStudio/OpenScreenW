@@ -165,14 +165,26 @@ export class VideoExporter {
         
         // Process each frame in the batch
         for (let i = 0; i < prefetchedFrames.length && !this.cancelled; i++) {
+          const currentFrameIndex = batchStart + i;
           const videoFrame = prefetchedFrames[i];
+          
           if (!videoFrame) {
-            console.warn(`[VideoExporter] Frame ${batchStart + i} is null, skipping`);
+            console.warn(`[VideoExporter] Frame ${currentFrameIndex} is null, skipping`);
+            frameIndex++;
+            // Update progress even for skipped frames
+            if (this.config.onProgress) {
+              this.config.onProgress({
+                currentFrame: frameIndex,
+                totalFrames,
+                percentage: (frameIndex / totalFrames) * 100,
+                estimatedTimeRemaining: 0,
+              });
+            }
             continue;
           }
           
-          const timestamp = (batchStart + i) * frameDuration;
-          const sourceTimeMs = timeMap.get(batchStart + i)!;
+          const timestamp = currentFrameIndex * frameDuration;
+          const sourceTimeMs = timeMap.get(currentFrameIndex)!;
           
           // Render the frame with all effects using source timestamp
           const sourceTimestamp = sourceTimeMs * 1000; // Convert to microseconds
@@ -202,7 +214,7 @@ export class VideoExporter {
           if (this.encoder && this.encoder.state === 'configured') {
             this.encodeQueue++;
             this.encoder.encode(exportFrame, { 
-              keyFrame: (batchStart + i) % 150 === 0 
+              keyFrame: currentFrameIndex % 150 === 0 
             });
           }
           

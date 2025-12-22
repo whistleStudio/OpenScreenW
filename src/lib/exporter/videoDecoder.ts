@@ -147,6 +147,8 @@ export class FastVideoDecoder {
       console.warn('[FastVideoDecoder] Could not extract decoder description:', error);
     }
     
+    let decoderError: Error | null = null;
+    
     this.decoder = new VideoDecoder({
       output: (frame: VideoFrame) => {
         // Calculate frame number from timestamp
@@ -165,6 +167,7 @@ export class FastVideoDecoder {
       },
       error: (e) => {
         console.error('[FastVideoDecoder] VideoDecoder error:', e);
+        decoderError = e instanceof Error ? e : new Error(String(e));
       }
     });
     
@@ -174,6 +177,11 @@ export class FastVideoDecoder {
     }
     
     this.decoder.configure(config);
+    
+    // Check if there was an error during initialization
+    if (decoderError) {
+      throw decoderError;
+    }
   }
   
   private getDecoderDescription(box: any): Uint8Array {
@@ -220,11 +228,7 @@ export class FastVideoDecoder {
   async prefetchFrames(startFrame: number, count: number): Promise<void> {
     if (!this.decoder || !this.mp4File || !this.videoTrack) return;
     
-    // Get sample information
-    const samples: any[] = [];
-    this.mp4File.seek(0, true);
-    
-    // Set up extraction
+    // Set up extraction options
     this.mp4File.setExtractionOptions(this.videoTrack.id, null, { 
       nbSamples: count 
     });
@@ -236,7 +240,7 @@ export class FastVideoDecoder {
       if (this.frameCache.has(i)) continue;
       
       try {
-        // Get sample data for this frame
+        // Get sample data for this frame (MP4Box uses 1-based indexing)
         const sample = this.mp4File.getSample(this.videoTrack.id, i + 1);
         
         if (sample) {
