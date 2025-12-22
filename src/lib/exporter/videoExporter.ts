@@ -217,18 +217,11 @@ export class VideoExporter {
             const canvas = this.renderer!.getCanvas();
             
             // Create VideoFrame from canvas for encoding
-            // Use bt709 matrix for H.264/H.265 compatibility (YUV color space)
-            // @ts-expect-error - colorSpace property exists at runtime but not in type definitions
-          const exportFrame = new VideoFrame(canvas, {
-            timestamp,
-            duration: frameDuration,
-            colorSpace: {
-              primaries: 'bt709',
-              transfer: 'bt709',
-              matrix: 'bt709',
-              fullRange: false,
-            },
-          });
+            // Canvas is in RGB space; encoder will convert to YUV (bt709) based on config
+            const exportFrame = new VideoFrame(canvas, {
+              timestamp,
+              duration: frameDuration,
+            });
           
           // Wait for encode queue to have space
           while (this.encodeQueue >= this.MAX_ENCODE_QUEUE && !this.cancelled) {
@@ -450,6 +443,8 @@ export class VideoExporter {
       latencyMode: 'quality', // Keep quality for better output
       bitrateMode: 'variable', // VBR is faster than CBR
       hardwareAcceleration: 'prefer-hardware',
+      // @ts-expect-error - avc parameter exists at runtime but not in type definitions
+      avc: { format: 'avc' }, // Ensure proper AVC format for MP4 container
     };
 
     // Check hardware support first
