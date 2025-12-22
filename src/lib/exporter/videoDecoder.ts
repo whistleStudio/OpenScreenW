@@ -76,14 +76,27 @@ export class FastVideoDecoder {
   
   async loadVideo(videoUrl: string): Promise<DecodedVideoInfo> {
     // 1. Fetch video file
-    const response = await fetch(videoUrl);
-    const arrayBuffer = await response.arrayBuffer();
+    let arrayBuffer: ArrayBuffer;
+    
+    try {
+      const response = await fetch(videoUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch video: ${response.status} ${response.statusText}`);
+      }
+      arrayBuffer = await response.arrayBuffer();
+      console.log('[FastVideoDecoder] Loaded video file, size:', arrayBuffer.byteLength, 'bytes');
+    } catch (error) {
+      console.error('[FastVideoDecoder] Error fetching video:', error);
+      throw new Error(`Failed to load video from ${videoUrl}: ${error}`);
+    }
     
     // 2. Use MP4Box to parse container (imported from npm package)
     this.mp4File = MP4BoxModule.createFile();
     
     return new Promise((resolve, reject) => {
       this.mp4File.onReady = (info: any) => {
+        console.log('[FastVideoDecoder] MP4Box ready, video info:', info);
+        
         // Find video track
         this.videoTrack = info.videoTracks[0];
         
@@ -100,6 +113,8 @@ export class FastVideoDecoder {
           codec: this.videoTrack.codec,
         };
         
+        console.log('[FastVideoDecoder] Video info extracted:', this.info);
+        
         // 3. Initialize VideoDecoder
         this.initDecoder().then(() => {
           this.isReady = true;
@@ -107,12 +122,23 @@ export class FastVideoDecoder {
         }).catch(reject);
       };
       
-      this.mp4File.onError = (e: any) => reject(new Error(`MP4Box error: ${e}`));
+      this.mp4File.onError = (e: any) => {
+        console.error('[FastVideoDecoder] MP4Box error:', e);
+        reject(new Error(`MP4Box error: ${e}`));
+      };
       
-      // Parse file
-      (arrayBuffer as any).fileStart = 0;
-      this.mp4File.appendBuffer(arrayBuffer);
-      this.mp4File.flush();
+      try {
+        // Parse file - MP4Box expects the buffer with fileStart property
+        const buffer = arrayBuffer as any;
+        buffer.fileStart = 0;
+        
+        console.log('[FastVideoDecoder] Appending buffer to MP4Box, size:', buffer.byteLength);
+        this.mp4File.appendBuffer(buffer);
+        this.mp4File.flush();
+      } catch (error) {
+        console.error('[FastVideoDecoder] Error appending buffer:', error);
+        reject(error);
+      }
     });
   }
   
