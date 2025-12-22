@@ -520,11 +520,11 @@ export default function VideoEditor() {
 
         // Ultra-optimized bitrate for maximum export speed (6-10 Mbps range)
         const totalPixels = exportWidth * exportHeight;
-        bitrate = 8_000_000; // 8 Mbps for 1080p - significantly reduced
+        bitrate = 8_000_000; // 8 Mbps base (up to 1080p)
         if (totalPixels > 1920 * 1080 && totalPixels <= 2560 * 1440) {
           bitrate = 12_000_000; // 12 Mbps for 1440p
         } else if (totalPixels > 2560 * 1440) {
-          bitrate = 18_000_000; // 18 Mbps for 4K
+          bitrate = 18_000_000; // 18 Mbps for 4K+
         }
       } else {
         // Use quality-based target resolution
