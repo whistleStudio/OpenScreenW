@@ -189,7 +189,9 @@ export class VideoExporter {
 
         if (this.encoder && this.encoder.state === 'configured') {
           this.encodeQueue++;
-          this.encoder.encode(exportFrame, { keyFrame: i % 150 === 0 });
+          // Use keyframe every 2 seconds for faster encoding and seeking
+          const keyframeInterval = Math.floor(this.config.frameRate * 2);
+          this.encoder.encode(exportFrame, { keyFrame: i % keyframeInterval === 0 });
         } else {
           console.warn(`[Frame ${i}] Encoder not ready! State: ${this.encoder?.state}`);
         }
@@ -307,8 +309,8 @@ export class VideoExporter {
       height: this.config.height,
       bitrate: this.config.bitrate,
       framerate: this.config.frameRate,
-      latencyMode: 'quality',
-      bitrateMode: 'constant',
+      latencyMode: 'realtime',
+      bitrateMode: 'variable',
       hardwareAcceleration: 'prefer-hardware',
     };
 

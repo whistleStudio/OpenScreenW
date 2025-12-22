@@ -558,7 +558,7 @@ export default function VideoEditor() {
         videoUrl: videoPath,
         width: exportWidth,
         height: exportHeight,
-        frameRate: 60,
+        frameRate: 30, // Use 30fps for faster export while maintaining good quality
         bitrate,
         codec: 'avc1.640033',
         wallpaper,
