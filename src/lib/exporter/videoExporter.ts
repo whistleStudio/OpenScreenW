@@ -217,15 +217,16 @@ export class VideoExporter {
             const canvas = this.renderer!.getCanvas();
             
             // Create VideoFrame from canvas for encoding
+            // Use bt709 matrix for H.264/H.265 compatibility (YUV color space)
             // @ts-expect-error - colorSpace property exists at runtime but not in type definitions
           const exportFrame = new VideoFrame(canvas, {
             timestamp,
             duration: frameDuration,
             colorSpace: {
               primaries: 'bt709',
-              transfer: 'iec61966-2-1',
-              matrix: 'rgb',
-              fullRange: true,
+              transfer: 'bt709',
+              matrix: 'bt709',
+              fullRange: false,
             },
           });
           
@@ -306,15 +307,16 @@ export class VideoExporter {
           const canvas = this.renderer!.getCanvas();
           
           // Create VideoFrame from canvas for encoding
+          // Use bt709 matrix for H.264/H.265 compatibility (YUV color space)
           // @ts-expect-error - colorSpace property exists at runtime but not in type definitions
           const exportFrame = new VideoFrame(canvas, {
             timestamp,
             duration: frameDuration,
             colorSpace: {
               primaries: 'bt709',
-              transfer: 'iec61966-2-1',
-              matrix: 'rgb',
-              fullRange: true,
+              transfer: 'bt709',
+              matrix: 'bt709',
+              fullRange: false,
             },
           });
           
@@ -400,11 +402,12 @@ export class VideoExporter {
           try {
             if (isFirstChunk && this.videoDescription) {
               // Add decoder config for the first chunk
+              // Use bt709 for H.264/H.265 YUV color space
               const colorSpace = this.videoColorSpace || {
                 primaries: 'bt709',
-                transfer: 'iec61966-2-1',
-                matrix: 'rgb',
-                fullRange: true,
+                transfer: 'bt709',
+                matrix: 'bt709',
+                fullRange: false,
               };
 
               const metadata: EncodedVideoChunkMetadata = {
