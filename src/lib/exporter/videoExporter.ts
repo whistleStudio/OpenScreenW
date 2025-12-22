@@ -33,6 +33,7 @@ export class VideoExporter {
   private encodeQueue = 0;
   // Increased queue size for better throughput with hardware encoding
   private readonly MAX_ENCODE_QUEUE = 240; // Doubled for faster processing
+  private readonly PROGRESS_UPDATE_INTERVAL = 10; // Update progress every N frames
   private videoDescription: Uint8Array | undefined;
   private videoColorSpace: VideoColorSpaceInit | undefined;
   // Track muxing promises for parallel processing
@@ -200,8 +201,8 @@ export class VideoExporter {
 
         frameIndex++;
 
-        // Update progress every 10 frames to reduce overhead
-        if (this.config.onProgress && frameIndex % 10 === 0) {
+        // Update progress every N frames to reduce overhead
+        if (this.config.onProgress && (frameIndex % this.PROGRESS_UPDATE_INTERVAL === 0 || frameIndex === totalFrames)) {
           this.config.onProgress({
             currentFrame: frameIndex,
             totalFrames,
@@ -213,16 +214,6 @@ export class VideoExporter {
 
       if (this.cancelled) {
         return { success: false, error: 'Export cancelled' };
-      }
-
-      // Send final progress update
-      if (this.config.onProgress) {
-        this.config.onProgress({
-          currentFrame: totalFrames,
-          totalFrames,
-          percentage: 100,
-          estimatedTimeRemaining: 0,
-        });
       }
 
       // Finalize encoding
