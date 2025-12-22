@@ -84,6 +84,15 @@ export class VideoExporter {
       this.decoder = new VideoFileDecoder();
       const videoInfo = await this.decoder.loadVideo(this.config.videoUrl);
 
+      // Check if source video has audio
+      const videoElement = this.decoder.getVideoElement();
+      const hasAudio = videoElement && videoElement.mozHasAudio !== false && 
+                      videoElement.webkitAudioDecodedByteCount !== undefined && 
+                      videoElement.webkitAudioDecodedByteCount > 0 ||
+                      (videoElement && videoElement.audioTracks && videoElement.audioTracks.length > 0);
+      
+      console.log('[VideoExporter] Source video has audio:', hasAudio);
+
       // Initialize frame renderer
       this.renderer = new FrameRenderer({
         width: this.config.width,
@@ -126,11 +135,11 @@ export class VideoExporter {
       console.log('[VideoExporter] Effective duration:', effectiveDuration, 's');
       console.log('[VideoExporter] Total frames to export:', totalFrames);
 
-      // Process frames with optimized seeking strategy
+      // Process frames with ultra-optimized seeking strategy
       const frameDuration = 1_000_000 / this.config.frameRate; // in microseconds
       let frameIndex = 0;
       const timeStep = 1 / this.config.frameRate;
-      const SEEK_THRESHOLD = 0.1; // Only seek if more than 100ms difference
+      const SEEK_THRESHOLD = 0.5; // Increased to 500ms - only seek for major jumps
 
       while (frameIndex < totalFrames && !this.cancelled) {
         const i = frameIndex;
@@ -141,8 +150,8 @@ export class VideoExporter {
         const sourceTimeMs = this.mapEffectiveToSourceTime(effectiveTimeMs);
         const videoTime = sourceTimeMs / 1000;
           
-        // Only seek if there's a significant time jump (e.g., trim regions or first frame)
-        // This dramatically reduces seeks and improves export speed
+        // Only seek if there's a major time jump (e.g., trim regions)
+        // Increased threshold dramatically reduces seeks for maximum speed
         const timeDiff = Math.abs(videoElement.currentTime - videoTime);
         const needsSeek = timeDiff > SEEK_THRESHOLD;
 
@@ -153,7 +162,7 @@ export class VideoExporter {
             videoElement.requestVideoFrameCallback(() => resolve());
           });
         } else if (needsSeek) {
-          // Significant time jump: full seek with event wait
+          // Major time jump: full seek with event wait
           const seekedPromise = new Promise<void>(resolve => {
             videoElement.addEventListener('seeked', () => resolve(), { once: true });
           });
@@ -161,11 +170,9 @@ export class VideoExporter {
           videoElement.currentTime = videoTime;
           await seekedPromise;
         } else {
-          // Consecutive frames: fast path without seek event
-          // Set time directly and yield to event loop for frame readiness
+          // Consecutive frames: ultra-fast path - just set time, no wait
+          // The video element will have the frame ready since we're moving forward sequentially
           videoElement.currentTime = videoTime;
-          // Minimal yield - may need adjustment based on system performance
-          await new Promise(resolve => requestAnimationFrame(() => resolve(undefined)));
         }
 
         // Create a VideoFrame from the video element (on GPU!)
