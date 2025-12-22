@@ -1,5 +1,5 @@
 import type { ExportConfig, ExportProgress, ExportResult } from './types';
-import { FastVideoDecoder } from './videoDecoder';
+import { FastVideoDecoder, VideoFileDecoder } from './videoDecoder';
 import { FrameRenderer } from './frameRenderer';
 import { VideoMuxer } from './muxer';
 import type { ZoomRegion, CropRegion, TrimRegion, AnnotationRegion } from '@/components/video-editor/types';
@@ -26,6 +26,7 @@ interface VideoExporterConfig extends ExportConfig {
 export class VideoExporter {
   private config: VideoExporterConfig;
   private decoder: FastVideoDecoder | null = null;
+  private fileDecoder: VideoFileDecoder | null = null; // Fallback decoder for non-MP4 formats
   private renderer: FrameRenderer | null = null;
   private encoder: VideoEncoder | null = null;
   private muxer: VideoMuxer | null = null;
@@ -102,9 +103,30 @@ export class VideoExporter {
       this.cleanup();
       this.cancelled = false;
 
-      // Initialize decoder and load video using FastVideoDecoder
-      this.decoder = new FastVideoDecoder();
-      const videoInfo = await this.decoder.loadVideo(this.config.videoUrl);
+      // Try to use FastVideoDecoder (for MP4), fall back to VideoFileDecoder for other formats
+      let videoInfo;
+      
+      try {
+        console.log('[VideoExporter] Attempting to use FastVideoDecoder (MP4 only)...');
+        this.decoder = new FastVideoDecoder();
+        videoInfo = await this.decoder.loadVideo(this.config.videoUrl);
+        console.log('[VideoExporter] ✓ Using FastVideoDecoder for optimized performance');
+      } catch (error: any) {
+        // Check if it's a format error (WebM, etc.)
+        if (error.message && (error.message.includes('WebM') || error.message.includes('Matroska') || error.message.includes('Unsupported video format'))) {
+          console.warn('[VideoExporter] FastVideoDecoder does not support this format:', error.message);
+          console.log('[VideoExporter] Falling back to VideoFileDecoder (slower but supports more formats)...');
+          
+          this.fileDecoder = new VideoFileDecoder();
+          videoInfo = await this.fileDecoder.loadVideo(this.config.videoUrl);
+          this.decoder = null; // Clear FastVideoDecoder
+          
+          console.log('[VideoExporter] ✓ Using VideoFileDecoder (fallback mode - export will be slower)');
+        } else {
+          // Other errors should be re-thrown
+          throw error;
+        }
+      }
 
       // Initialize frame renderer
       this.renderer = new FrameRenderer({
@@ -145,55 +167,57 @@ export class VideoExporter {
       // Pre-build time mapping table to avoid per-frame calculations
       const timeMap = this.buildTimeMap(totalFrames);
       
-      // Process frames with batch prefetching
+      // Process frames with batch prefetching (FastVideoDecoder) or frame-by-frame (VideoFileDecoder)
       const frameDuration = 1_000_000 / this.config.frameRate; // in microseconds
-      const PREFETCH_BATCH = 60; // Prefetch 60 frames at a time
+      const PREFETCH_BATCH = 60; // Prefetch 60 frames at a time (FastVideoDecoder only)
       let frameIndex = 0;
 
-      while (frameIndex < totalFrames && !this.cancelled) {
-        const batchStart = frameIndex;
-        const batchEnd = Math.min(frameIndex + PREFETCH_BATCH, totalFrames);
-        
-        // Batch prefetch frames
-        const prefetchPromises: Promise<VideoFrame | null>[] = [];
-        for (let i = batchStart; i < batchEnd; i++) {
-          const sourceTimeMs = timeMap.get(i)!;
-          prefetchPromises.push(this.decoder!.getFrameAtTime(sourceTimeMs));
-        }
-        
-        const prefetchedFrames = await Promise.all(prefetchPromises);
-        
-        // Process each frame in the batch
-        for (let i = 0; i < prefetchedFrames.length && !this.cancelled; i++) {
-          const currentFrameIndex = batchStart + i;
-          const videoFrame = prefetchedFrames[i];
+      if (this.decoder) {
+        // Fast path: Use FastVideoDecoder with batch prefetching
+        while (frameIndex < totalFrames && !this.cancelled) {
+          const batchStart = frameIndex;
+          const batchEnd = Math.min(frameIndex + PREFETCH_BATCH, totalFrames);
           
-          if (!videoFrame) {
-            console.warn(`[VideoExporter] Frame ${currentFrameIndex} is null, skipping`);
-            frameIndex++;
-            // Update progress even for skipped frames
-            if (this.config.onProgress) {
-              this.config.onProgress({
-                currentFrame: currentFrameIndex + 1,
-                totalFrames,
-                percentage: ((currentFrameIndex + 1) / totalFrames) * 100,
-                estimatedTimeRemaining: 0,
-              });
-            }
-            continue;
+          // Batch prefetch frames
+          const prefetchPromises: Promise<VideoFrame | null>[] = [];
+          for (let i = batchStart; i < batchEnd; i++) {
+            const sourceTimeMs = timeMap.get(i)!;
+            prefetchPromises.push(this.decoder.getFrameAtTime(sourceTimeMs));
           }
           
-          const timestamp = currentFrameIndex * frameDuration;
-          const sourceTimeMs = timeMap.get(currentFrameIndex)!;
+          const prefetchedFrames = await Promise.all(prefetchPromises);
           
-          // Render the frame with all effects using source timestamp
-          const sourceTimestamp = sourceTimeMs * 1000; // Convert to microseconds
-          await this.renderer!.renderFrame(videoFrame, sourceTimestamp);
-          
-          const canvas = this.renderer!.getCanvas();
-          
-          // Create VideoFrame from canvas for encoding
-          // @ts-expect-error - colorSpace property exists at runtime but not in type definitions
+          // Process each frame in the batch
+          for (let i = 0; i < prefetchedFrames.length && !this.cancelled; i++) {
+            const currentFrameIndex = batchStart + i;
+            const videoFrame = prefetchedFrames[i];
+            
+            if (!videoFrame) {
+              console.warn(`[VideoExporter] Frame ${currentFrameIndex} is null, skipping`);
+              frameIndex++;
+              // Update progress even for skipped frames
+              if (this.config.onProgress) {
+                this.config.onProgress({
+                  currentFrame: currentFrameIndex + 1,
+                  totalFrames,
+                  percentage: ((currentFrameIndex + 1) / totalFrames) * 100,
+                  estimatedTimeRemaining: 0,
+                });
+              }
+              continue;
+            }
+            
+            const timestamp = currentFrameIndex * frameDuration;
+            const sourceTimeMs = timeMap.get(currentFrameIndex)!;
+            
+            // Render the frame with all effects using source timestamp
+            const sourceTimestamp = sourceTimeMs * 1000; // Convert to microseconds
+            await this.renderer!.renderFrame(videoFrame, sourceTimestamp);
+            
+            const canvas = this.renderer!.getCanvas();
+            
+            // Create VideoFrame from canvas for encoding
+            // @ts-expect-error - colorSpace property exists at runtime but not in type definitions
           const exportFrame = new VideoFrame(canvas, {
             timestamp,
             duration: frameDuration,
@@ -227,6 +251,95 @@ export class VideoExporter {
               currentFrame: currentFrameIndex + 1,
               totalFrames,
               percentage: ((currentFrameIndex + 1) / totalFrames) * 100,
+              estimatedTimeRemaining: 0,
+            });
+          }
+        }
+      }
+    } else if (this.fileDecoder) {
+        // Slow path: Use VideoFileDecoder with frame-by-frame seeking (fallback for WebM, etc.)
+        const videoElement = this.fileDecoder.getVideoElement();
+        if (!videoElement) {
+          throw new Error('Video element not available from VideoFileDecoder');
+        }
+        
+        console.log('[VideoExporter] Using VideoFileDecoder fallback - processing frame-by-frame');
+        
+        while (frameIndex < totalFrames && !this.cancelled) {
+          const timestamp = frameIndex * frameDuration;
+          const sourceTimeMs = timeMap.get(frameIndex)!;
+          const videoTime = sourceTimeMs / 1000;
+          
+          // Seek to the frame position
+          const needsSeek = Math.abs(videoElement.currentTime - videoTime) > 0.001;
+          
+          if (needsSeek) {
+            const seekedPromise = new Promise<void>(resolve => {
+              videoElement.addEventListener('seeked', () => resolve(), { once: true });
+            });
+            
+            videoElement.currentTime = videoTime;
+            await seekedPromise;
+          } else if (frameIndex === 0) {
+            // For the first frame, wait for it to be ready
+            await new Promise<void>(resolve => {
+              if ('requestVideoFrameCallback' in videoElement) {
+                (videoElement as any).requestVideoFrameCallback(() => resolve());
+              } else {
+                // Fallback if requestVideoFrameCallback is not available
+                setTimeout(() => resolve(), 16);
+              }
+            });
+          }
+          
+          // Create VideoFrame from video element
+          const videoFrame = new VideoFrame(videoElement, {
+            timestamp,
+          });
+          
+          // Render the frame with all effects
+          const sourceTimestamp = sourceTimeMs * 1000; // Convert to microseconds
+          await this.renderer!.renderFrame(videoFrame, sourceTimestamp);
+          
+          videoFrame.close();
+          
+          const canvas = this.renderer!.getCanvas();
+          
+          // Create VideoFrame from canvas for encoding
+          // @ts-expect-error - colorSpace property exists at runtime but not in type definitions
+          const exportFrame = new VideoFrame(canvas, {
+            timestamp,
+            duration: frameDuration,
+            colorSpace: {
+              primaries: 'bt709',
+              transfer: 'iec61966-2-1',
+              matrix: 'rgb',
+              fullRange: true,
+            },
+          });
+          
+          // Wait for encoder queue space
+          while (this.encodeQueue >= this.MAX_ENCODE_QUEUE && !this.cancelled) {
+            await new Promise(resolve => setTimeout(resolve, 0));
+          }
+          
+          // Encode the frame
+          if (this.encoder && this.encoder.state === 'configured') {
+            this.encodeQueue++;
+            this.encoder.encode(exportFrame, { 
+              keyFrame: frameIndex % 150 === 0 
+            });
+          }
+          
+          exportFrame.close();
+          
+          // Update progress
+          frameIndex++;
+          if (this.config.onProgress) {
+            this.config.onProgress({
+              currentFrame: frameIndex,
+              totalFrames,
+              percentage: (frameIndex / totalFrames) * 100,
               estimatedTimeRemaining: 0,
             });
           }
@@ -381,6 +494,15 @@ export class VideoExporter {
         console.warn('Error destroying decoder:', e);
       }
       this.decoder = null;
+    }
+
+    if (this.fileDecoder) {
+      try {
+        this.fileDecoder.destroy();
+      } catch (e) {
+        console.warn('Error destroying file decoder:', e);
+      }
+      this.fileDecoder = null;
     }
 
     if (this.renderer) {

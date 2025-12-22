@@ -93,6 +93,15 @@ export class FastVideoDecoder {
         .join(' ');
       console.log('[FastVideoDecoder] First 16 bytes (hex):', hexDump);
       
+      // Check for WebM/Matroska files (EBML header: 0x1A 0x45 0xDF 0xA3)
+      if (arrayBuffer.byteLength >= 4) {
+        const first4Bytes = view.getUint32(0, false);
+        if (first4Bytes === 0x1A45DFA3) {
+          throw new Error('WebM/Matroska format detected. FastVideoDecoder only supports MP4 files. Please convert your video to MP4 format, or the system will use the slower fallback decoder.');
+        }
+      }
+      
+      // Check if this is an MP4 file
       // MP4 files should start with a box size (4 bytes) then box type (4 bytes)
       // Common box types: 'ftyp', 'mdat', 'moov', 'free'
       if (arrayBuffer.byteLength >= 8) {
@@ -111,12 +120,18 @@ export class FastVideoDecoder {
         });
         
         if (!isPrintable) {
-          throw new Error(`Invalid MP4 file format. First box type contains non-printable characters: ${hexDump.substring(12, 23)}`);
+          throw new Error(`Unsupported video format. FastVideoDecoder only supports MP4 files. Detected format signature: ${hexDump.substring(0, 11)}. Please convert to MP4 or use the fallback decoder.`);
+        }
+        
+        // Verify this looks like a common MP4 box type
+        const validBoxTypes = ['ftyp', 'mdat', 'moov', 'free', 'skip', 'wide'];
+        if (!validBoxTypes.includes(boxType)) {
+          console.warn(`[FastVideoDecoder] Unexpected box type "${boxType}". Proceeding but may fail.`);
         }
       }
     } catch (error) {
-      console.error('[FastVideoDecoder] Error fetching video:', error);
-      throw new Error(`Failed to load video from ${videoUrl}: ${error}`);
+      console.error('[FastVideoDecoder] Error loading video:', error);
+      throw error;
     }
     
     // 2. Use MP4Box to parse container (imported from npm package)
