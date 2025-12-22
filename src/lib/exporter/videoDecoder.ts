@@ -195,6 +195,13 @@ export class FastVideoDecoder {
     // This is a simplified version that works with MP4Box structure
     try {
       if (box.write) {
+        // Validate box size to prevent memory exhaustion
+        const MAX_BOX_SIZE = 1024 * 1024; // 1MB max for decoder config
+        if (!box.size || box.size <= 0 || box.size > MAX_BOX_SIZE) {
+          console.warn(`[FastVideoDecoder] Invalid box size: ${box.size}, skipping decoder description`);
+          return new Uint8Array(0);
+        }
+        
         // MP4Box boxes have a write method to serialize
         const stream = {
           data: new Uint8Array(box.size),
