@@ -537,9 +537,9 @@ export default function VideoEditor() {
         // Optimized bitrate for maximum export speed
         const totalPixels = exportWidth * exportHeight;
         if (totalPixels <= 1280 * 720) {
-          bitrate = exportQuality === 'low' ? 4_000_000 : 6_000_000; // 4 Mbps (low) or 6 Mbps (medium) for 720p
+          bitrate = 6_000_000; // 6 Mbps for 720p (medium quality)
         } else if (totalPixels <= 1920 * 1080) {
-          bitrate = 8_000_000; // 8 Mbps for 1080p
+          bitrate = 8_000_000; // 8 Mbps for 1080p (good quality)
         } else {
           bitrate = 16_000_000; // 16 Mbps for higher resolutions
         }
