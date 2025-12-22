@@ -518,13 +518,13 @@ export default function VideoEditor() {
           }
         }
 
-        // Ultra-optimized bitrate for maximum export speed (6-10 Mbps range)
+        // Balanced bitrate for good quality and reasonable export speed
         const totalPixels = exportWidth * exportHeight;
-        bitrate = 8_000_000; // 8 Mbps base (up to 1080p)
+        bitrate = 18_000_000; // 18 Mbps base (up to 1080p) - increased for clarity
         if (totalPixels > 1920 * 1080 && totalPixels <= 2560 * 1440) {
-          bitrate = 12_000_000; // 12 Mbps for 1440p
+          bitrate = 30_000_000; // 30 Mbps for 1440p
         } else if (totalPixels > 2560 * 1440) {
-          bitrate = 18_000_000; // 18 Mbps for 4K+
+          bitrate = 50_000_000; // 50 Mbps for 4K+
         }
       } else {
         // Use quality-based target resolution
@@ -534,14 +534,14 @@ export default function VideoEditor() {
         exportHeight = Math.floor(targetHeight / 2) * 2; // Ensure even
         exportWidth = Math.floor((exportHeight * aspectRatioValue) / 2) * 2; // Ensure even
         
-        // Ultra-optimized bitrate for maximum export speed
+        // Balanced bitrate for good quality and reasonable export speed
         const totalPixels = exportWidth * exportHeight;
         if (totalPixels <= 1280 * 720) {
-          bitrate = 4_000_000; // 4 Mbps for 720p
+          bitrate = 8_000_000; // 8 Mbps for 720p - doubled for clarity
         } else if (totalPixels <= 1920 * 1080) {
-          bitrate = 8_000_000; // 8 Mbps for 1080p
+          bitrate = 18_000_000; // 18 Mbps for 1080p - increased for clarity
         } else {
-          bitrate = 12_000_000; // 12 Mbps for higher resolutions
+          bitrate = 30_000_000; // 30 Mbps for higher resolutions
         }
       }
 
@@ -558,7 +558,7 @@ export default function VideoEditor() {
         videoUrl: videoPath,
         width: exportWidth,
         height: exportHeight,
-        frameRate: 24, // Reduced to 24fps (cinema standard) for maximum export speed
+        frameRate: 30, // Increased to 30fps for better quality while maintaining good speed
         bitrate,
         // codec is not specified - let videoExporter auto-detect the best supported codec
         wallpaper,
