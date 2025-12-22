@@ -36,6 +36,7 @@ export class VideoExporter {
   private readonly PROGRESS_UPDATE_INTERVAL = 10; // Update progress every N frames
   private videoDescription: Uint8Array | undefined;
   private videoColorSpace: VideoColorSpaceInit | undefined;
+  private selectedCodec: string | undefined; // Track the codec that was actually selected
   // Track muxing promises for parallel processing
   private muxingPromises: Promise<void>[] = [];
   private chunkCount = 0;
@@ -244,7 +245,6 @@ export class VideoExporter {
     this.muxingPromises = [];
     this.chunkCount = 0;
     let videoDescription: Uint8Array | undefined;
-    let selectedCodec: string | undefined;
 
     this.encoder = new VideoEncoder({
       output: (chunk, meta) => {
@@ -276,7 +276,7 @@ export class VideoExporter {
 
               const metadata: EncodedVideoChunkMetadata = {
                 decoderConfig: {
-                  codec: selectedCodec || this.config.codec || 'avc1.640033',
+                  codec: this.selectedCodec || 'avc1.640033', // Use the codec that was actually selected
                   codedWidth: this.config.width,
                   codedHeight: this.config.height,
                   description: this.videoDescription,
@@ -312,8 +312,8 @@ export class VideoExporter {
 
     let encoderConfig: VideoEncoderConfig | null = null;
     
-    // If user specified a codec, try it first
-    if (this.config.codec) {
+    // If user specified a codec, try it first (only if not already in list)
+    if (this.config.codec && !codecCandidates.includes(this.config.codec)) {
       codecCandidates.unshift(this.config.codec);
     }
 
@@ -336,7 +336,7 @@ export class VideoExporter {
       if (hardwareSupport.supported) {
         console.log(`[VideoExporter] Using codec ${codec} with hardware acceleration`);
         encoderConfig = testConfig;
-        selectedCodec = codec;
+        this.selectedCodec = codec;
         break;
       }
 
@@ -347,12 +347,12 @@ export class VideoExporter {
       if (softwareSupport.supported) {
         console.log(`[VideoExporter] Using codec ${codec} with software encoding`);
         encoderConfig = testConfig;
-        selectedCodec = codec;
+        this.selectedCodec = codec;
         break;
       }
     }
 
-    if (!encoderConfig) {
+    if (!encoderConfig || !this.selectedCodec) {
       throw new Error('No supported video codec found on this system. Tried: ' + codecCandidates.join(', '));
     }
 
@@ -400,5 +400,6 @@ export class VideoExporter {
     this.chunkCount = 0;
     this.videoDescription = undefined;
     this.videoColorSpace = undefined;
+    this.selectedCodec = undefined;
   }
 }
