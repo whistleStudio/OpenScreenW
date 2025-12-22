@@ -276,7 +276,7 @@ export class VideoExporter {
 
               const metadata: EncodedVideoChunkMetadata = {
                 decoderConfig: {
-                  codec: this.selectedCodec || 'avc1.640033', // Use the codec that was actually selected
+                  codec: this.selectedCodec!, // selectedCodec is guaranteed to be set after initialization
                   codedWidth: this.config.width,
                   codedHeight: this.config.height,
                   description: this.videoDescription,
@@ -312,7 +312,8 @@ export class VideoExporter {
 
     let encoderConfig: VideoEncoderConfig | null = null;
     
-    // If user specified a codec, try it first (only if not already in list)
+    // If user specified a codec not in default list, try it first
+    // If it's already in the list, it will be tried in order of preference
     if (this.config.codec && !codecCandidates.includes(this.config.codec)) {
       codecCandidates.unshift(this.config.codec);
     }
