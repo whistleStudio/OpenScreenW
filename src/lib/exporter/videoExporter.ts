@@ -126,10 +126,11 @@ export class VideoExporter {
       console.log('[VideoExporter] Effective duration:', effectiveDuration, 's');
       console.log('[VideoExporter] Total frames to export:', totalFrames);
 
-      // Process frames continuously without batching delays
+      // Process frames with optimized seeking strategy
       const frameDuration = 1_000_000 / this.config.frameRate; // in microseconds
       let frameIndex = 0;
       const timeStep = 1 / this.config.frameRate;
+      const SEEK_THRESHOLD = 0.1; // Only seek if more than 100ms difference
 
       while (frameIndex < totalFrames && !this.cancelled) {
         const i = frameIndex;
@@ -140,8 +141,10 @@ export class VideoExporter {
         const sourceTimeMs = this.mapEffectiveToSourceTime(effectiveTimeMs);
         const videoTime = sourceTimeMs / 1000;
           
-        // Seek if needed or wait for first frame to be ready
-        const needsSeek = Math.abs(videoElement.currentTime - videoTime) > 0.001;
+        // Only seek if there's a significant time jump (e.g., trim regions or first frame)
+        // This dramatically reduces seeks and improves export speed
+        const timeDiff = Math.abs(videoElement.currentTime - videoTime);
+        const needsSeek = timeDiff > SEEK_THRESHOLD;
 
         if (needsSeek) {
           // Attach listener BEFORE setting currentTime to avoid race condition
@@ -156,6 +159,12 @@ export class VideoExporter {
           await new Promise<void>(resolve => {
             videoElement.requestVideoFrameCallback(() => resolve());
           });
+        } else {
+          // For consecutive frames, just set time without waiting for seek event
+          // This is much faster as it avoids the seek event overhead
+          videoElement.currentTime = videoTime;
+          // Small delay to allow frame to be ready
+          await new Promise(resolve => setTimeout(resolve, 0));
         }
 
         // Create a VideoFrame from the video element (on GPU!)
