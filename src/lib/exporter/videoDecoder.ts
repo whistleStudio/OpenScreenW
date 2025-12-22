@@ -198,22 +198,6 @@ export class FastVideoDecoder {
       hardwareAcceleration: 'prefer-hardware' as any,
     };
     
-    // Get decoder configuration description
-    try {
-      const trak = this.mp4File.getTrackById(this.videoTrack.id);
-      const stsd = trak?.mdia?.minf?.stbl?.stsd;
-      if (stsd && stsd.entries && stsd.entries.length > 0) {
-        const entry = stsd.entries[0];
-        const descriptionBox = entry.avcC || entry.hvcC || entry.vpcC || entry.av1C;
-        
-        if (descriptionBox) {
-          config.description = this.getDecoderDescription(descriptionBox);
-        }
-      }
-    } catch (error) {
-      console.warn('[FastVideoDecoder] Could not extract decoder description:', error);
-    }
-    
     let decoderError: Error | null = null;
     
     this.decoder = new VideoDecoder({
@@ -243,6 +227,26 @@ export class FastVideoDecoder {
         decoderError = e instanceof Error ? e : new Error(String(e));
       }
     });
+    
+    // Get decoder configuration description
+    try {
+      const trak = this.mp4File.getTrackById(this.videoTrack.id);
+      const stsd = trak?.mdia?.minf?.stbl?.stsd;
+      if (stsd && stsd.entries && stsd.entries.length > 0) {
+        const entry = stsd.entries[0];
+        const descriptionBox = entry.avcC || entry.hvcC || entry.vpcC || entry.av1C;
+        
+        if (descriptionBox) {
+          const description = this.getDecoderDescription(descriptionBox);
+          if (description && description.length > 0) {
+            // Create a new copy to avoid detachment issues
+            config.description = new Uint8Array(description);
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('[FastVideoDecoder] Could not extract decoder description:', error);
+    }
     
     const support = await VideoDecoder.isConfigSupported(config);
     if (!support.supported) {
