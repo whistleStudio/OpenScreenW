@@ -174,9 +174,9 @@ export class VideoExporter {
             // Update progress even for skipped frames
             if (this.config.onProgress) {
               this.config.onProgress({
-                currentFrame: frameIndex,
+                currentFrame: currentFrameIndex + 1,
                 totalFrames,
-                percentage: (frameIndex / totalFrames) * 100,
+                percentage: ((currentFrameIndex + 1) / totalFrames) * 100,
                 estimatedTimeRemaining: 0,
               });
             }
@@ -193,10 +193,10 @@ export class VideoExporter {
           const canvas = this.renderer!.getCanvas();
           
           // Create VideoFrame from canvas for encoding
+          // @ts-expect-error - colorSpace property exists at runtime but not in type definitions
           const exportFrame = new VideoFrame(canvas, {
             timestamp,
             duration: frameDuration,
-            // @ts-ignore - colorSpace not in TypeScript definitions but works at runtime
             colorSpace: {
               primaries: 'bt709',
               transfer: 'iec61966-2-1',
@@ -224,9 +224,9 @@ export class VideoExporter {
           frameIndex++;
           if (this.config.onProgress) {
             this.config.onProgress({
-              currentFrame: frameIndex,
+              currentFrame: currentFrameIndex + 1,
               totalFrames,
-              percentage: (frameIndex / totalFrames) * 100,
+              percentage: ((currentFrameIndex + 1) / totalFrames) * 100,
               estimatedTimeRemaining: 0,
             });
           }

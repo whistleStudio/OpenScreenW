@@ -146,7 +146,13 @@ export class FrameRenderer {
   private async prerenderBackground(): Promise<void> {
     if (!this.backgroundSprite || this.backgroundRendered) return;
     
-    const bgCanvas = this.backgroundSprite as any as HTMLCanvasElement;
+    // backgroundSprite is stored as a canvas element during setup
+    if (!(this.backgroundSprite instanceof HTMLCanvasElement)) {
+      console.warn('[FrameRenderer] Background sprite is not a canvas, skipping pre-render');
+      return;
+    }
+    
+    const bgCanvas = this.backgroundSprite as HTMLCanvasElement;
     const tempCtx = bgCanvas.getContext('2d', { willReadFrequently: true });
     
     if (tempCtx) {
@@ -499,9 +505,9 @@ export class FrameRenderer {
       } else {
         ctx.putImageData(this.backgroundImageData, 0, 0);
       }
-    } else if (this.backgroundSprite) {
+    } else if (this.backgroundSprite instanceof HTMLCanvasElement) {
       // Fallback to direct canvas draw if ImageData not available
-      const bgCanvas = this.backgroundSprite as any as HTMLCanvasElement;
+      const bgCanvas = this.backgroundSprite;
       
       if (this.config.showBlur) {
         ctx.save();

@@ -80,7 +80,7 @@ export class FastVideoDecoder {
     // 2. Use MP4Box to parse container
     const MP4Box = (window as any).MP4Box;
     if (!MP4Box) {
-      throw new Error('MP4Box library not loaded. Please ensure mp4box.all.min.js is included in index.html');
+      throw new Error('MP4Box library not loaded. Please ensure mp4box.all.min.js is included from CDN in index.html');
     }
     
     this.mp4File = MP4Box.createFile();
@@ -152,7 +152,13 @@ export class FastVideoDecoder {
     this.decoder = new VideoDecoder({
       output: (frame: VideoFrame) => {
         // Calculate frame number from timestamp
-        const frameNumber = Math.floor((frame.timestamp / 1000000) * this.info!.frameRate);
+        if (!this.info) {
+          console.warn('[FastVideoDecoder] Received frame but info is null');
+          frame.close();
+          return;
+        }
+        
+        const frameNumber = Math.floor((frame.timestamp / 1000000) * this.info.frameRate);
         this.frameCache.set(frameNumber, frame);
         
         // Control cache size - remove oldest frames
@@ -228,12 +234,15 @@ export class FastVideoDecoder {
   async prefetchFrames(startFrame: number, count: number): Promise<void> {
     if (!this.decoder || !this.mp4File || !this.videoTrack) return;
     
+    // Get total number of samples to prevent out-of-bounds access
+    const totalSamples = this.videoTrack.nb_samples;
+    
     // Set up extraction options
     this.mp4File.setExtractionOptions(this.videoTrack.id, null, { 
       nbSamples: count 
     });
     
-    const endFrame = startFrame + count;
+    const endFrame = Math.min(startFrame + count, totalSamples);
     
     for (let i = startFrame; i < endFrame; i++) {
       // Skip already cached frames
