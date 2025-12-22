@@ -85,6 +85,35 @@ export class FastVideoDecoder {
       }
       arrayBuffer = await response.arrayBuffer();
       console.log('[FastVideoDecoder] Loaded video file, size:', arrayBuffer.byteLength, 'bytes');
+      
+      // Debug: Check the first 16 bytes of the file
+      const view = new DataView(arrayBuffer);
+      const hexDump = Array.from(new Uint8Array(arrayBuffer, 0, Math.min(16, arrayBuffer.byteLength)))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join(' ');
+      console.log('[FastVideoDecoder] First 16 bytes (hex):', hexDump);
+      
+      // MP4 files should start with a box size (4 bytes) then box type (4 bytes)
+      // Common box types: 'ftyp', 'mdat', 'moov', 'free'
+      if (arrayBuffer.byteLength >= 8) {
+        const boxType = String.fromCharCode(
+          view.getUint8(4), 
+          view.getUint8(5), 
+          view.getUint8(6), 
+          view.getUint8(7)
+        );
+        console.log('[FastVideoDecoder] First box type:', boxType);
+        
+        // Check if this looks like a valid MP4 box type (printable ASCII)
+        const isPrintable = boxType.split('').every(c => {
+          const code = c.charCodeAt(0);
+          return code >= 32 && code <= 126;
+        });
+        
+        if (!isPrintable) {
+          throw new Error(`Invalid MP4 file format. First box type contains non-printable characters: ${hexDump.substring(12, 23)}`);
+        }
+      }
     } catch (error) {
       console.error('[FastVideoDecoder] Error fetching video:', error);
       throw new Error(`Failed to load video from ${videoUrl}: ${error}`);
@@ -124,7 +153,7 @@ export class FastVideoDecoder {
       
       this.mp4File.onError = (e: any) => {
         console.error('[FastVideoDecoder] MP4Box error:', e);
-        reject(new Error(`MP4Box error: ${e}`));
+        reject(new Error(`MP4Box parsing failed: ${e}. This may not be a valid MP4 file or the format is not supported.`));
       };
       
       try {
