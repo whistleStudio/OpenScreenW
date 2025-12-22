@@ -518,13 +518,13 @@ export default function VideoEditor() {
           }
         }
 
-        // Optimized bitrate for faster encoding with acceptable quality
+        // Ultra-optimized bitrate for maximum export speed (6-10 Mbps range)
         const totalPixels = exportWidth * exportHeight;
-        bitrate = 15_000_000; // Reduced from 30 Mbps
+        bitrate = 8_000_000; // 8 Mbps for 1080p - significantly reduced
         if (totalPixels > 1920 * 1080 && totalPixels <= 2560 * 1440) {
-          bitrate = 25_000_000; // Reduced from 50 Mbps
+          bitrate = 12_000_000; // 12 Mbps for 1440p
         } else if (totalPixels > 2560 * 1440) {
-          bitrate = 40_000_000; // Reduced from 80 Mbps
+          bitrate = 18_000_000; // 18 Mbps for 4K
         }
       } else {
         // Use quality-based target resolution
@@ -534,14 +534,14 @@ export default function VideoEditor() {
         exportHeight = Math.floor(targetHeight / 2) * 2; // Ensure even
         exportWidth = Math.floor((exportHeight * aspectRatioValue) / 2) * 2; // Ensure even
         
-        // Optimized bitrate for faster encoding
+        // Ultra-optimized bitrate for maximum export speed
         const totalPixels = exportWidth * exportHeight;
         if (totalPixels <= 1280 * 720) {
-          bitrate = 6_000_000; // Reduced from 10 Mbps
+          bitrate = 4_000_000; // 4 Mbps for 720p
         } else if (totalPixels <= 1920 * 1080) {
-          bitrate = 12_000_000; // Reduced from 20 Mbps
+          bitrate = 8_000_000; // 8 Mbps for 1080p
         } else {
-          bitrate = 18_000_000; // Reduced from 30 Mbps
+          bitrate = 12_000_000; // 12 Mbps for higher resolutions
         }
       }
 
@@ -558,7 +558,7 @@ export default function VideoEditor() {
         videoUrl: videoPath,
         width: exportWidth,
         height: exportHeight,
-        frameRate: 30, // Use 30fps for faster export while maintaining good quality
+        frameRate: 24, // Reduced to 24fps (cinema standard) for maximum export speed
         bitrate,
         // codec is not specified - let videoExporter auto-detect the best supported codec
         wallpaper,

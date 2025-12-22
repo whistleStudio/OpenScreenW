@@ -33,7 +33,7 @@ export class VideoExporter {
   private encodeQueue = 0;
   // Increased queue size for better throughput with hardware encoding
   private readonly MAX_ENCODE_QUEUE = 240; // Doubled for faster processing
-  private readonly PROGRESS_UPDATE_INTERVAL = 10; // Update progress every N frames
+  private readonly PROGRESS_UPDATE_INTERVAL = 30; // Update progress every 30 frames for minimal overhead
   private videoDescription: Uint8Array | undefined;
   private videoColorSpace: VideoColorSpaceInit | undefined;
   private selectedCodec: string | undefined; // Track the codec that was actually selected
