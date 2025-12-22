@@ -1,40 +1,11 @@
+import * as MP4Box from 'mp4box';
+
 export interface DecodedVideoInfo {
   width: number;
   height: number;
   duration: number; // in seconds
   frameRate: number;
   codec: string;
-}
-
-/**
- * Dynamically load MP4Box library on-demand to avoid blocking application startup
- */
-async function loadMP4Box(): Promise<any> {
-  // Check if already loaded
-  if ((window as any).MP4Box) {
-    return (window as any).MP4Box;
-  }
-  
-  // Load MP4Box dynamically
-  return new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/mp4box@0.5.2/dist/mp4box.all.min.js';
-    script.async = true;
-    
-    script.onload = () => {
-      if ((window as any).MP4Box) {
-        resolve((window as any).MP4Box);
-      } else {
-        reject(new Error('MP4Box failed to load properly'));
-      }
-    };
-    
-    script.onerror = () => {
-      reject(new Error('Failed to load MP4Box library from CDN'));
-    };
-    
-    document.head.appendChild(script);
-  });
 }
 
 export class VideoFileDecoder {
@@ -108,9 +79,7 @@ export class FastVideoDecoder {
     const response = await fetch(videoUrl);
     const arrayBuffer = await response.arrayBuffer();
     
-    // 2. Dynamically load MP4Box library (only when needed)
-    const MP4Box = await loadMP4Box();
-    
+    // 2. Use MP4Box to parse container (imported from npm package)
     this.mp4File = MP4Box.createFile();
     
     return new Promise((resolve, reject) => {
