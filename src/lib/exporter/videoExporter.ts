@@ -84,14 +84,14 @@ export class VideoExporter {
       this.decoder = new VideoFileDecoder();
       const videoInfo = await this.decoder.loadVideo(this.config.videoUrl);
 
-      // Check if source video has audio
+      // Check if source video has audio using standard API
       const videoElement = this.decoder.getVideoElement();
-      const hasAudio = videoElement && videoElement.mozHasAudio !== false && 
-                      videoElement.webkitAudioDecodedByteCount !== undefined && 
-                      videoElement.webkitAudioDecodedByteCount > 0 ||
-                      (videoElement && videoElement.audioTracks && videoElement.audioTracks.length > 0);
+      const hasAudio = !!(videoElement?.audioTracks && videoElement.audioTracks.length > 0);
       
       console.log('[VideoExporter] Source video has audio:', hasAudio);
+      if (hasAudio) {
+        console.warn('[VideoExporter] Audio export not currently supported - audio will be excluded from output');
+      }
 
       // Initialize frame renderer
       this.renderer = new FrameRenderer({
