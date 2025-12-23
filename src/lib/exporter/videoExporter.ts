@@ -186,14 +186,16 @@ export class VideoExporter {
           videoElement.currentTime = videoTime;
           await seekedPromise;
         } else {
-          // Consecutive frames: ultra-fast with minimal safety wait
+          // Consecutive frames: fast with safe decoder wait
           // Set currentTime to next frame position
           videoElement.currentTime = videoTime;
           
-          // Minimal 1ms delay: gives decoder time while keeping speed
-          // Microtask alone is too fast and causes frame drops
-          // 1ms per frame = 1.44s for 1-minute video (vs 23s with rVFC)
-          await new Promise<void>(resolve => setTimeout(resolve, 1));
+          // 4ms delay: optimal balance between speed and reliability
+          // - Too short (1ms): causes frame drops at start/middle
+          // - Too long (16ms with rVFC): wastes time waiting for paint cycles
+          // - 4ms sweet spot: gives decoder adequate time at 24fps
+          // Total wait: 1440 frames × 4ms = 5.76s for 1-min video (vs 23s with rVFC)
+          await new Promise<void>(resolve => setTimeout(resolve, 4));
         }
 
         // Create a VideoFrame from the video element (on GPU!)
