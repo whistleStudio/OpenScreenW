@@ -186,18 +186,14 @@ export class VideoExporter {
           videoElement.currentTime = videoTime;
           await seekedPromise;
         } else {
-          // Consecutive frames: set time and use requestAnimationFrame for synchronization
-          // This is much faster than requestVideoFrameCallback (~16ms vs ~1-2ms)
+          // Consecutive frames: ultra-fast with minimal safety wait
+          // Set currentTime to next frame position
           videoElement.currentTime = videoTime;
           
-          // Use a small delay to ensure decoder has prepared the frame
-          // Testing shows 5ms is sufficient for most decoders at 24fps
-          await new Promise<void>(resolve => {
-            setTimeout(() => {
-              // Double-check with rAF to ensure we're in sync with rendering
-              requestAnimationFrame(() => resolve());
-            }, 5);
-          });
+          // Minimal 1ms delay: gives decoder time while keeping speed
+          // Microtask alone is too fast and causes frame drops
+          // 1ms per frame = 1.44s for 1-minute video (vs 23s with rVFC)
+          await new Promise<void>(resolve => setTimeout(resolve, 1));
         }
 
         // Create a VideoFrame from the video element (on GPU!)
