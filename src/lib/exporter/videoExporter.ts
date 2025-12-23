@@ -48,6 +48,8 @@ export class VideoExporter {
   private muxingPromises: Promise<void>[] = [];
   private chunkCount = 0;
   private audioChunkCount = 0;
+  // Queue management optimization
+  private encodeQueueResolvers: (() => void)[] = [];
 
   constructor(config: VideoExporterConfig) {
     this.config = config;
@@ -215,9 +217,11 @@ export class VideoExporter {
           },
         });
 
-        // Check encoder queue before encoding to keep it full
-        while (this.encodeQueue >= this.MAX_ENCODE_QUEUE && !this.cancelled) {
-          await new Promise(resolve => setTimeout(resolve, 0));
+        // Optimized queue management: use Promise.race to avoid busy-waiting
+        if (this.encodeQueue >= this.MAX_ENCODE_QUEUE && !this.cancelled) {
+          await new Promise<void>(resolve => {
+            this.encodeQueueResolvers.push(resolve);
+          });
         }
 
         if (this.encoder && this.encoder.state === 'configured') {
@@ -336,6 +340,9 @@ export class VideoExporter {
 
         this.muxingPromises.push(muxingPromise);
         this.encodeQueue--;
+        // Notify waiting frames that queue space is available
+        const resolver = this.encodeQueueResolvers.shift();
+        if (resolver) resolver();
       },
       error: (error) => {
         console.error('[VideoExporter] Encoder error:', error);
@@ -541,6 +548,10 @@ export class VideoExporter {
   }
 
   private cleanup(): void {
+    // Clear any pending queue resolvers
+    this.encodeQueueResolvers.forEach(resolve => resolve());
+    this.encodeQueueResolvers = [];
+    
     if (this.encoder) {
       try {
         if (this.encoder.state === 'configured') {

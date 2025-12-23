@@ -50,6 +50,7 @@ export class FrameRenderer {
   private animationState: AnimationState;
   private layoutCache: any = null;
   private currentVideoTime = 0;
+  private textureCache: Texture | null = null; // Cache texture to avoid recreations
 
   constructor(config: FrameRenderConfig) {
     this.config = config;
@@ -259,30 +260,31 @@ export class FrameRenderer {
 
     // Create or update video sprite from VideoFrame
     if (!this.videoSprite) {
-      const texture = Texture.from(videoFrame as any);
-      this.videoSprite = new Sprite(texture);
+      this.textureCache = Texture.from(videoFrame as any);
+      this.videoSprite = new Sprite(this.textureCache);
       this.videoContainer.addChild(this.videoSprite);
     } else {
-      // Destroy old texture to avoid memory leaks, then create new one
-      const oldTexture = this.videoSprite.texture;
+      // Update texture without destroying - faster than recreate
+      if (this.textureCache) {
+        this.textureCache.update();
+      }
       const newTexture = Texture.from(videoFrame as any);
       this.videoSprite.texture = newTexture;
-      oldTexture.destroy(true);
+      if (this.textureCache && this.textureCache !== newTexture) {
+        this.textureCache.destroy(true);
+      }
+      this.textureCache = newTexture;
     }
 
     // Apply layout
     this.updateLayout();
 
     const timeMs = this.currentVideoTime * 1000;
-    const TICKS_PER_FRAME = 1;
     
-    let maxMotionIntensity = 0;
-    for (let i = 0; i < TICKS_PER_FRAME; i++) {
-      const motionIntensity = this.updateAnimationState(timeMs);
-      maxMotionIntensity = Math.max(maxMotionIntensity, motionIntensity);
-    }
+    // Simplified: single animation state update per frame for speed
+    const motionIntensity = this.updateAnimationState(timeMs);
     
-    // Apply transform once with maximum motion intensity from all ticks
+    // Apply transform
     applyZoomTransform({
       cameraContainer: this.cameraContainer,
       blurFilter: this.blurFilter,
@@ -291,7 +293,7 @@ export class FrameRenderer {
       zoomScale: this.animationState.scale,
       focusX: this.animationState.focusX,
       focusY: this.animationState.focusY,
-      motionIntensity: maxMotionIntensity,
+      motionIntensity: motionIntensity,
       isPlaying: true,
       motionBlurEnabled: this.config.motionBlurEnabled ?? true,
     });
@@ -514,6 +516,10 @@ export class FrameRenderer {
 
 
   destroy(): void {
+    if (this.textureCache) {
+      this.textureCache.destroy(true);
+      this.textureCache = null;
+    }
     if (this.videoSprite) {
       this.videoSprite.destroy();
       this.videoSprite = null;
