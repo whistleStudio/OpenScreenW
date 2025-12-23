@@ -50,7 +50,6 @@ export class FrameRenderer {
   private animationState: AnimationState;
   private layoutCache: any = null;
   private currentVideoTime = 0;
-  private textureCache: Texture | null = null; // Cache texture to avoid recreations
 
   constructor(config: FrameRenderConfig) {
     this.config = config;
@@ -260,20 +259,15 @@ export class FrameRenderer {
 
     // Create or update video sprite from VideoFrame
     if (!this.videoSprite) {
-      this.textureCache = Texture.from(videoFrame as any);
-      this.videoSprite = new Sprite(this.textureCache);
+      const texture = Texture.from(videoFrame as any);
+      this.videoSprite = new Sprite(texture);
       this.videoContainer.addChild(this.videoSprite);
     } else {
-      // Update texture without destroying - faster than recreate
-      if (this.textureCache) {
-        this.textureCache.update();
-      }
+      // Destroy old texture to avoid memory leaks, then create new one
+      const oldTexture = this.videoSprite.texture;
       const newTexture = Texture.from(videoFrame as any);
       this.videoSprite.texture = newTexture;
-      if (this.textureCache && this.textureCache !== newTexture) {
-        this.textureCache.destroy(true);
-      }
-      this.textureCache = newTexture;
+      oldTexture.destroy(true);
     }
 
     // Apply layout
@@ -516,10 +510,6 @@ export class FrameRenderer {
 
 
   destroy(): void {
-    if (this.textureCache) {
-      this.textureCache.destroy(true);
-      this.textureCache = null;
-    }
     if (this.videoSprite) {
       this.videoSprite.destroy();
       this.videoSprite = null;

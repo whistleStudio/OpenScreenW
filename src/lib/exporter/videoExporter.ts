@@ -186,9 +186,12 @@ export class VideoExporter {
           videoElement.currentTime = videoTime;
           await seekedPromise;
         } else {
-          // Consecutive frames: ultra-fast path - just set time, no wait
-          // The video element will have the frame ready since we're moving forward sequentially
+          // Consecutive frames: fast path with minimal wait to ensure frame is ready
           videoElement.currentTime = videoTime;
+          // Wait for the next video frame to ensure the decoder has the frame ready
+          await new Promise<void>(resolve => {
+            videoElement.requestVideoFrameCallback(() => resolve());
+          });
         }
 
         // Create a VideoFrame from the video element (on GPU!)
