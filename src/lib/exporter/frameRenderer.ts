@@ -100,7 +100,7 @@ export class FrameRenderer {
 
     // Setup blur filter for video container
     this.blurFilter = new BlurFilter();
-    this.blurFilter.quality = 3;
+    this.blurFilter.quality = 1; // Reduced quality for faster export
     this.blurFilter.resolution = this.app.renderer.resolution;
     this.blurFilter.blur = 0;
     this.videoContainer.filters = [this.blurFilter];
@@ -274,15 +274,11 @@ export class FrameRenderer {
     this.updateLayout();
 
     const timeMs = this.currentVideoTime * 1000;
-    const TICKS_PER_FRAME = 1;
     
-    let maxMotionIntensity = 0;
-    for (let i = 0; i < TICKS_PER_FRAME; i++) {
-      const motionIntensity = this.updateAnimationState(timeMs);
-      maxMotionIntensity = Math.max(maxMotionIntensity, motionIntensity);
-    }
+    // Simplified: single animation state update per frame for speed
+    const motionIntensity = this.updateAnimationState(timeMs);
     
-    // Apply transform once with maximum motion intensity from all ticks
+    // Apply transform
     applyZoomTransform({
       cameraContainer: this.cameraContainer,
       blurFilter: this.blurFilter,
@@ -291,7 +287,7 @@ export class FrameRenderer {
       zoomScale: this.animationState.scale,
       focusX: this.animationState.focusX,
       focusY: this.animationState.focusY,
-      motionIntensity: maxMotionIntensity,
+      motionIntensity: motionIntensity,
       isPlaying: true,
       motionBlurEnabled: this.config.motionBlurEnabled ?? true,
     });
